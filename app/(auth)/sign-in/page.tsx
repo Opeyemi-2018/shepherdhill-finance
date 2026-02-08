@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,9 +27,12 @@ import { Loader2, Moon, Sun, Eye, EyeOff } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { useState } from "react";
+import { useAuth } from "@/context/user";
+import { signInAction } from "@/actions/auth";
 
 const SignIn = () => {
   const { setTheme } = useTheme();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -41,19 +45,22 @@ const SignIn = () => {
       password: "",
     },
   });
-
+  // In your SignIn component
   const onSubmit = async (data: SignInType) => {
     setIsLoading(true);
 
-
     try {
-     
+      const result = await signInAction(data);
 
-    
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+
+      login(result.data.token, result.data.user);
 
 
       toast.success("Signed in successfully");
-
       router.push("/overview");
     } catch (err: any) {
       toast.error(err.message || "Invalid credentials");

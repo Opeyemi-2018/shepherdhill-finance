@@ -4,7 +4,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -19,13 +18,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { CalendarIcon, Paperclip, X } from "lucide-react";
+import { CalendarIcon, Paperclip, X, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { useRouter } from "next/navigation";
 import {
   Form,
   FormControl,
@@ -35,68 +34,104 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import HeaderContent from "@/components/HeaderContent";
+import { invoiceSchema, InvoiceFormValues } from "@/types/invoice";
+import { useAuth } from "@/context/user";
+import { createInvoiceAction } from "@/actions/invoice";
+import { useClients } from "@/hooks/useClient";
 
-const clients = [
-  { id: "1", name: "John Doe" },
-  { id: "2", name: "Jane Smith" },
-  { id: "3", name: "Acme Corp" },
-  { id: "4", name: "Tech Solutions Ltd" },
-];
+export default function CreateInvoice() {
+  const { token } = useAuth();
+  const router = useRouter();
 
-const invoiceSchema = z.object({
-  client: z.string().min(1, "Please select a client"),
-  invoiceId: z.string().min(1, "Invoice ID is required"),
-  invoiceDate: z.date({
-    message: "Invoice date is required",
-  }),
-  dueDate: z.date({
-    message: "Due date is required",
-  }),
-  amount: z
-    .string()
-    .min(1, "Amount is required")
-    .refine(
-      (val) => !isNaN(Number(val)) && Number(val) > 0,
-      "Amount must be a valid positive number",
-    ),
-  description: z.string().optional(),
-});
+  const {
+    clients,
+    isLoading: clientsLoading,
+    error: clientsError,
+  } = useClients();
 
-type InvoiceFormValues = z.infer<typeof invoiceSchema>;
-
-const CreateInvoice = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const form = useForm<InvoiceFormValues>({
-    resolver: zodResolver(invoiceSchema),
-    defaultValues: {
-      client: "",
-      invoiceId: `IV-${Math.floor(1000 + Math.random() * 9000)}`,
-      amount: "",
-      description: "",
-    },
-  });
+  resolver: zodResolver(invoiceSchema),
+  defaultValues: {
+    client_id: "",
+    amount: "",
+    description: "",
+  },
+});
 
-  const onSubmit = (data: InvoiceFormValues, isDraft: boolean = false) => {
-    console.log("Form Data:", data);
-    console.log("Is Draft:", isDraft);
-    console.log("Uploaded File:", uploadedFile);
-
-    if (isDraft) {
-      toast.success("Invoice saved as draft!");
-    } else {
-      toast.success("Invoice sent successfully!");
+  const handleSubmit = async (saveAsDraft: boolean) => {
+    if (!token) {
+      toast.error("You must be logged in to create an invoice");
+      router.push("/sign-in");
+      return;
     }
 
-    // Reset form after submission
-    form.reset({
-      client: "",
-      invoiceId: `IV-${Math.floor(1000 + Math.random() * 9000)}`,
-      amount: "",
-      description: "",
-    });
-    setUploadedFile(null);
+    if (saveAsDraft) {
+      setIsSavingDraft(true);
+    } else {
+      setIsCreating(true);
+    }
+
+    try {
+      const isValid = await form.trigger();
+      if (!isValid) {
+        toast.error("Please fill all required fields correctly");
+        return;
+      }
+
+      const values = form.getValues();
+
+      if (!values.client_id) {
+        toast.error("Please select a client");
+        return;
+      }
+
+      if (!values.invoice_date || !values.due_date) {
+        toast.error("Please select invoice and due dates");
+        return;
+      }
+
+      const payload = {
+        amount: Number(values.amount),
+        client_id: Number(values.client_id),
+        description: values.description || "",
+        status: "unpaid",
+        invoice_date: format(values.invoice_date, "yyyy-MM-dd"),
+        due_date: format(values.due_date, "yyyy-MM-dd"),
+        ...(saveAsDraft && { type: "draft" as const }),
+      };
+
+      console.log("Sending payload:", payload);
+
+      const result = await createInvoiceAction(payload, token);
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to process invoice");
+        return;
+      }
+
+      toast.success(
+        saveAsDraft
+          ? "Invoice saved as draft successfully!"
+          : "Invoice created successfully!"
+      );
+
+      router.push("/invoices");
+      form.reset();
+    } catch (error: any) {
+      console.error("Submission error:", error);
+      toast.error(error.message || "Failed to submit invoice");
+    } finally {
+      if (saveAsDraft) {
+        setIsSavingDraft(false);
+      } else {
+        setIsCreating(false);
+      }
+    }
   };
 
   const handleFileUpload = (file: File) => {
@@ -134,10 +169,8 @@ const CreateInvoice = () => {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileUpload(files[0]);
+    if (e.dataTransfer.files.length > 0) {
+      handleFileUpload(e.dataTransfer.files[0]);
     }
   };
 
@@ -149,74 +182,73 @@ const CreateInvoice = () => {
   };
 
   return (
-    <div className="">
+    <div>
       <HeaderContent
         title="Invoices"
         description="Fill in the invoice details or upload an invoice file"
       />
 
       <div className="bg-primary-foreground p-3 md:p-6 mt-4">
-        <h1 className="text-[#3A3A3A] dark:text-white text-[16px] md:text-[20] font-bold mb-3">
+        <h1 className="text-[#3A3A3A] dark:text-white text-[16px] md:text-[20px] font-bold mb-3">
           Create Invoice
         </h1>
+
         <Form {...form}>
           <form className="space-y-6">
-            {/* Client Selection */}
             <FormField
               control={form.control}
-              name="client"
+              name="client_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#2F2F2F] dark:text-white font-dm-sans font-medium">
-                    Client
-                  </FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl className="w-full">
-                      <SelectTrigger className="bg-[#F9FAFB] py-6 border-[#E5E7EB] h-12">
-                        <SelectValue placeholder="Select Client" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
+                  <FormLabel>Client</FormLabel>
+                  {clientsLoading ? (
+                    <div className="h-12 flex items-center justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      Loading clients...
+                    </div>
+                  ) : clientsError ? (
+                    <div className="h-12 flex items-center text-red-600">
+                      {clientsError}
+                    </div>
+                  ) : clients.length === 0 ? (
+                    <div className="h-12 flex items-center text-gray-500">
+                      No clients available
+                    </div>
+                  ) : (
+                    <>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-[#F9FAFB] py-6 border-[#E5E7EB] h-12">
+                            <SelectValue placeholder="Select Client" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {clients.map((client) => (
+                            <SelectItem
+                              key={client.id}
+                              value={client.id.toString()}
+                            >
+                              {client.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </>
+                  )}
                 </FormItem>
               )}
             />
 
             <FormField
               control={form.control}
-              name="invoiceId"
+              name="invoice_date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#2F2F2F] dark:text-white font-dm-sans font-medium">
-                    Invoice Id
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      className="bg-[#F9FAFB] border-[#E5E7EB] h-12"
-                      placeholder="IV-1025"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="invoiceDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-[#2F2F2F] dark:text-white font-dm-sans font-medium">
-                    Invoice Date
-                  </FormLabel>
+                  <FormLabel>Invoice Date</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -224,8 +256,9 @@ const CreateInvoice = () => {
                           variant="outline"
                           className={cn(
                             "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
-                            !field.value && "text-muted-foreground",
+                            !field.value && "text-muted-foreground"
                           )}
+                          disabled={isSavingDraft || isCreating}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value ? (
@@ -252,12 +285,10 @@ const CreateInvoice = () => {
 
             <FormField
               control={form.control}
-              name="dueDate"
+              name="due_date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#2F2F2F] dark:text-white font-dm-sans font-medium">
-                    Due Date
-                  </FormLabel>
+                  <FormLabel>Due Date</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -265,8 +296,9 @@ const CreateInvoice = () => {
                           variant="outline"
                           className={cn(
                             "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
-                            !field.value && "text-muted-foreground",
+                            !field.value && "text-muted-foreground"
                           )}
+                          disabled={isSavingDraft || isCreating}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           {field.value ? (
@@ -296,15 +328,15 @@ const CreateInvoice = () => {
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#2F2F2F] dark:text-white font-dm-sans font-medium">
-                    Amount
-                  </FormLabel>
+                  <FormLabel>Amount</FormLabel>
                   <FormControl>
                     <Input
-                      {...field}
                       type="number"
+                      step="0.01"
                       className="bg-[#F9FAFB] border-[#E5E7EB] h-12"
                       placeholder="Enter Amount"
+                      disabled={isSavingDraft || isCreating}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -317,14 +349,13 @@ const CreateInvoice = () => {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-[#2F2F2F] dark:text-white font-dm-sans font-medium">
-                    Description
-                  </FormLabel>
+                  <FormLabel>Description</FormLabel>
                   <FormControl>
                     <Textarea
-                      {...field}
                       className="bg-[#F9FAFB] border-[#E5E7EB] min-h-[100px] resize-none"
                       placeholder="Notes (optional)"
+                      disabled={isSavingDraft || isCreating}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -332,48 +363,58 @@ const CreateInvoice = () => {
               )}
             />
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 mt-6">
               <Button
                 type="button"
                 variant="outline"
                 className="px-6 bg-[#3A3A3A]/10"
-                onClick={() =>
-                  form.handleSubmit((data) => onSubmit(data, true))()
-                }
+                disabled={isSavingDraft || isCreating || clientsLoading}
+                onClick={() => handleSubmit(true)}
               >
-                Save as Draft
+                {isSavingDraft ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save as Draft"
+                )}
               </Button>
+
               <Button
                 type="button"
                 className="bg-[#FAB435]/30 hover:bg-[#FF8C00] text-[#FAB435] hover:text-white"
-                onClick={() =>
-                  form.handleSubmit((data) => onSubmit(data, false))()
-                }
+                disabled={isSavingDraft || isCreating || clientsLoading}
+                onClick={() => handleSubmit(false)}
               >
-                Send Invoice
+                {isCreating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create"
+                )}
               </Button>
             </div>
           </form>
         </Form>
 
-        {/* Divider */}
         <div className="flex items-center gap-4 my-4">
           <div className="flex-1 border-t border-gray-300"></div>
           <span className="text-gray-500 font-medium">Or</span>
           <div className="flex-1 border-t border-gray-300"></div>
         </div>
 
-        {/* Upload Invoice Section */}
-        <div className="">
-          <h2 className="md:text-[20px] font-bold dark:text-white  text-[#3A3A3A] mb-4">
+        <div>
+          <h2 className="md:text-[20px] font-bold dark:text-white text-[#3A3A3A] mb-4">
             Upload Invoice
           </h2>
 
-          {/* File Upload Area */}
           <div
             className={cn(
               "border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer",
-              isDragging ? "border-[#0A6DC0]" : "border-[#3A3A3A]/25",
+              isDragging ? "border-[#0A6DC0]" : "border-[#3A3A3A]/25"
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -421,7 +462,6 @@ const CreateInvoice = () => {
             )}
           </div>
 
-          {/* Action Buttons for Upload */}
           <div className="flex justify-end gap-3 mt-6">
             <Button
               type="button"
@@ -429,8 +469,7 @@ const CreateInvoice = () => {
               className="px-6 bg-[#3A3A3A]/10"
               onClick={() => {
                 if (uploadedFile) {
-                  toast.success("Invoice saved as draft!");
-                  setUploadedFile(null);
+                  toast.info("File upload feature coming soon!");
                 } else {
                   toast.error("Please upload a file first");
                 }
@@ -443,8 +482,7 @@ const CreateInvoice = () => {
               className="bg-[#FAB435]/30 hover:bg-[#FF8C00] text-[#FAB435] hover:text-white"
               onClick={() => {
                 if (uploadedFile) {
-                  toast.success("Invoice sent successfully!");
-                  setUploadedFile(null);
+                  toast.info("File upload feature coming soon!");
                 } else {
                   toast.error("Please upload a file first");
                 }
@@ -457,6 +495,4 @@ const CreateInvoice = () => {
       </div>
     </div>
   );
-};
-
-export default CreateInvoice;
+}

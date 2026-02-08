@@ -1,123 +1,110 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { IoChevronBackOutline } from "react-icons/io5";
+import {  Loader2 } from "lucide-react"; // ← add Loader2
+import { toast } from "sonner";
+import { useAuth } from "@/context/user";
+import { fetchInvoiceDetailAction, sendInvoiceAction } from "@/actions/invoice";
 import { FaUserLarge } from "react-icons/fa6";
-
-interface Invoice {
-  id: string;
-  invoiceId: string;
-  clientName: string;
-  clientEmail: string;
-  phone: string;
-  description: string;
-  invoiceDate: string;
-  amount: number;
-  status: "Paid" | "Sent" | "Draft" | "Overdue";
-}
-
-const invoiceData: Invoice[] = [
-  {
-    id: "1",
-    invoiceId: "INV-1024",
-    clientName: "ABC Logistics",
-    clientEmail: "abclogistics@gmail.com",
-    phone: "08011223868",
-    description: "Field Service",
-    invoiceDate: "2026-01-12",
-    amount: 250000,
-    status: "Paid",
-  },
-  {
-    id: "2",
-    invoiceId: "INV-1024",
-    clientName: "ABC Logistics",
-    clientEmail: "abclogistics@gmail.com",
-    phone: "08011223868",
-    description: "Field Service",
-    invoiceDate: "2026-01-12",
-    amount: 250000,
-    status: "Paid",
-  },
-  {
-    id: "3",
-    invoiceId: "INV-1024",
-    clientName: "ABC Logistics",
-    clientEmail: "abclogistics@gmail.com",
-    phone: "08011223868",
-    description: "Field Service",
-    invoiceDate: "2026-01-12",
-    amount: 250000,
-    status: "Paid",
-  },
-  {
-    id: "4",
-    invoiceId: "INV-1025",
-    clientName: "GreenField Ltd",
-    clientEmail: "greenfield@gmail.com",
-    phone: "08011223869",
-    description: "Security Service",
-    invoiceDate: "2026-01-14",
-    amount: 250000,
-    status: "Sent",
-  },
-  {
-    id: "5",
-    invoiceId: "INV-1026",
-    clientName: "MedPlus Services",
-    clientEmail: "medplus@gmail.com",
-    phone: "08011223870",
-    description: "Medical Service",
-    invoiceDate: "2026-01-15",
-    amount: 250000,
-    status: "Draft",
-  },
-  {
-    id: "6",
-    invoiceId: "INV-1027",
-    clientName: "Swift Supplies",
-    clientEmail: "swift@gmail.com",
-    phone: "08011223871",
-    description: "Supply Service",
-    invoiceDate: "2026-01-17",
-    amount: 250000,
-    status: "Overdue",
-  },
-];
 
 export default function InvoiceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { token } = useAuth();
+
   const invoiceId = params.id as string;
 
-  const invoice = invoiceData.find((inv) => inv.id === invoiceId);
+  const [invoice, setInvoice] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!invoice) {
+  // Separate loading state for Send button
+  const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    const loadInvoice = async () => {
+      if (!token) {
+        setError("Please log in to view this invoice");
+        setLoading(false);
+        return;
+      }
+
+      const result = await fetchInvoiceDetailAction(invoiceId, token);
+
+      if (!result.success) {
+        setError(result.error || "Failed to load invoice");
+        setLoading(false);
+        return;
+      }
+
+      setInvoice(result.data);
+      setLoading(false);
+    };
+
+    loadInvoice();
+  }, [invoiceId, token]);
+
+  const handleSendInvoice = async () => {
+    if (!token) {
+      toast.error("Please log in to send the invoice");
+      return;
+    }
+
+    if (!invoice?.id) {
+      toast.error("No invoice loaded");
+      return;
+    }
+
+    setIsSending(true);
+
+    try {
+      const result = await sendInvoiceAction(invoice.id, token);
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to send invoice");
+        return;
+      }
+
+      toast.success(result.message || "Invoice sent successfully!");
+      
+      // Optional: refresh data or page
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message || "An error occurred while sending");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="pt-2">
-        <div className="mt-6 text-center">
-          <p className="text-destructive mb-4">Invoice not found</p>
-          <Button onClick={() => router.back()} variant="outline">
-            Go Back
-          </Button>
-        </div>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-[#FAB435]" />
+      </div>
+    );
+  }
+
+  if (error || !invoice) {
+    return (
+      <div className="pt-10 text-center">
+        <p className="text-red-600 mb-6">{error || "Invoice not found"}</p>
+        <Button onClick={() => router.back()}>Go Back</Button>
       </div>
     );
   }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Paid":
-        return "text-green-700";
-      case "Sent":
-        return "text-blue-700";
-      case "Draft":
-        return "text-gray-700";
-      case "Overdue":
-        return "text-red-700";
-      default:
-        return "text-gray-700";
+    switch (status?.toLowerCase()) {
+      case "paid": return "text-green-600 dark:text-green-400";
+      case "sent":
+      case "partial": return "text-blue-600 dark:text-blue-400";
+      case "draft": return "text-gray-600 dark:text-gray-400";
+      case "overdue": return "text-red-600 dark:text-red-400";
+      default: return "text-gray-600 dark:text-gray-400";
     }
   };
 
@@ -135,10 +122,10 @@ export default function InvoiceDetailPage() {
           <div className="flex items-center gap-2">
             <FaUserLarge className="bg-primary-foreground dark:bg-transparent text-[#FAB435] rounded-full p-2 w-12 h-12" />
             <div>
-              <h1 className="md:text-[20px] font-medium">{invoice.clientName}</h1>
+              <h1 className="md:text-[20px] font-medium">{invoice.client.name}</h1>
               <div className="flex items-center gap-3 mt-1">
                 <p className="text-[14px] text-gray-500">
-                  {invoice.invoiceId} • {invoice.clientEmail}
+                  INV-{invoice.id} • {invoice.client.email}
                 </p>
               </div>
             </div>
@@ -149,8 +136,19 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" className="whitespace-nowrap">
             Download Invoice
           </Button>
-          <Button className="bg-[#FAB435] hover:bg-[#E89500] text-black hover:text-white whitespace-nowrap">
-            Send Invoice
+          <Button
+            className="bg-[#FAB435] hover:bg-[#E89500] text-black hover:text-white whitespace-nowrap"
+            onClick={handleSendInvoice}
+            disabled={isSending || loading}
+          >
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              "Send Invoice"
+            )}
           </Button>
         </div>
       </div>
@@ -162,24 +160,24 @@ export default function InvoiceDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Name</p>
-            <p className="font-medium text-[14px]">{invoice.clientName}</p>
+            <p className="text-[12px] text-muted-foreground">Client Name</p>
+            <p className="font-medium text-[14px]">{invoice.client.name}</p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Email</p>
-            <p className="font-medium text-[14px]">{invoice.clientEmail}</p>
+            <p className="text-[12px] text-muted-foreground">Client Email</p>
+            <p className="font-medium text-[14px]">{invoice.client.email}</p>
           </div>
 
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Invoice ID</p>
-            <p className="font-medium text-[14px]">{invoice.invoiceId}</p>
+            <p className="font-medium text-[14px]">INV-{invoice.id}</p>
           </div>
 
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Invoice Date</p>
             <p className="font-medium text-[14px]">
-              {new Date(invoice.invoiceDate).toLocaleDateString("en-GB", {
+              {new Date(invoice.invoice_date).toLocaleDateString("en-GB", {
                 day: "numeric",
                 month: "short",
                 year: "numeric",
@@ -188,26 +186,32 @@ export default function InvoiceDetailPage() {
           </div>
 
           <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Description</p>
-            <p className="font-medium text-[14px]">{invoice.description}</p>
+            <p className="text-[12px] text-muted-foreground">Due Date</p>
+            <p className="font-medium text-[14px]">
+              {new Date(invoice.due_date).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })}
+            </p>
           </div>
 
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Amount</p>
             <p className="font-medium text-[14px]">
-              ₦{invoice.amount.toLocaleString()}
+              ₦{Number(invoice.amount).toLocaleString()}
             </p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Phone</p>
-            <p className="font-medium text-[14px]">{invoice.phone}</p>
+            <p className="text-[12px] text-muted-foreground">Description</p>
+            <p className="font-medium text-[14px]">{invoice.description || "—"}</p>
           </div>
 
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Status</p>
             <p className={`font-medium text-[14px] ${getStatusColor(invoice.status)}`}>
-              • {invoice.status}
+              • {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
             </p>
           </div>
         </div>

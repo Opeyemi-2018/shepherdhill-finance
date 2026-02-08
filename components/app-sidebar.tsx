@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  LayoutDashboard,
-  Briefcase,
-  Settings,
-  LogOut,
-} from "lucide-react";
+import { LayoutDashboard, Briefcase, Settings, LogOut } from "lucide-react";
 
 import {
   AlertDialog,
@@ -34,6 +29,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import React from "react";
+import { useAuth } from "@/context/user";
 
 interface MenuItem {
   title: string;
@@ -62,11 +58,22 @@ const items: MenuItem[] = [
     url: "/receiviable",
     icon: Settings,
   },
+  {
+    title: "Payable",
+    url: "/payable",
+    icon: Settings,
+  },
+  {
+    title: "Report",
+    url: "/report",
+    icon: Settings,
+  },
 ];
 
 export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { logout } = useAuth();
 
   const isActive = (url: string) => pathname === url;
 
@@ -138,7 +145,10 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
                   <AlertDialogFooter className="flex justify-center gap-2">
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => router.push("/sign-in")}
+                      onClick={() => {
+                        logout();
+                        router.push("/sign-in");
+                      }}
                       className="bg-red-600 text-white dark:hover:text-black"
                     >
                       Continue
