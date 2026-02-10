@@ -1,14 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import HeaderContent from "@/components/HeaderContent";
-import { useAuth } from "@/context/user";
 import { Loader2 } from "lucide-react";
-import { fetchInvoices } from "@/actions/invoice";
+import { useInvoices } from "@/hooks/useInvoice";
 
 const TableSkeleton = () => (
   <>
@@ -30,38 +29,11 @@ const TableSkeleton = () => (
 );
 
 export default function InvoiceTable() {
-  const { token } = useAuth();
   const router = useRouter();
+  const { invoices, loading, error } = useInvoices();
 
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"All Invoices" | "Paid" | "Unpaid" | "Draft">("All Invoices");
-
-  useEffect(() => {
-    const loadInvoices = async () => {
-      if (!token) {
-        setError("Please log in to view invoices");
-        setLoading(false);
-        return;
-      }
-
-      const result = await fetchInvoices(token);
-
-      if (!result.success) {
-        setError(result.error || "Failed to load invoices");
-        setLoading(false);
-        return;
-      }
-
-      // Use the "all" array from response
-      setInvoices(result.data.data.all || []);
-      setLoading(false);
-    };
-
-    loadInvoices();
-  }, [token]);
 
   const getInvoiceStatusBadge = (status: string) => {
     let textClass = "text-gray-700 dark:text-gray-400";
@@ -197,7 +169,8 @@ export default function InvoiceTable() {
                 filteredInvoices.map((invoice) => (
                   <tr
                     key={invoice.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer"
+                    onClick={() => handleViewInvoice(invoice.id)}
                   >
                     <td className="py-4 pl-3 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {`INV-${invoice.id.toString().padStart(4, '0')}`}
@@ -223,7 +196,10 @@ export default function InvoiceTable() {
                         variant="ghost"
                         size="sm"
                         className="text-[#0A6DC0] hover:text-[#085a9e] hover:bg-blue-50"
-                        onClick={() => router.push(`/invoices/${invoice.id}`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewInvoice(invoice.id);
+                        }}
                       >
                         View
                       </Button>
@@ -241,7 +217,7 @@ export default function InvoiceTable() {
           </table>
         </div>
 
-        {/* Pagination placeholder */}
+        {/* Pagination placeholder — can be enhanced later */}
         <div className="flex items-center justify-center gap-2 mt-8">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
             &lt;

@@ -49,8 +49,8 @@ const items: MenuItem[] = [
     icon: Briefcase,
   },
   {
-    title: "Clients",
-    url: "/client",
+    title: "Statement",
+    url: "/statement",
     icon: Settings,
   },
   {

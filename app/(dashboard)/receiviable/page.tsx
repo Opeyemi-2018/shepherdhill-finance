@@ -8,6 +8,7 @@ import { Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import HeaderContent from "@/components/HeaderContent";
 import { useAuth } from "@/context/user";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface Receivable {
   id: number;
@@ -36,6 +37,7 @@ const TableSkeleton = () => (
 
 export default function ReceivablesBreakdownPage() {
   const { token } = useAuth();
+  const router = useRouter();
 
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +66,7 @@ export default function ReceivablesBreakdownPage() {
               Authorization: `Bearer ${token}`,
             },
             cache: "no-store",
-          }
+          },
         );
 
         if (!response.ok) {
@@ -82,7 +84,8 @@ export default function ReceivablesBreakdownPage() {
           id: item.id,
           clientName: item.client?.name || "Unknown Client",
           amountInvoiced: item.invoice?.amount || item.amount || "0",
-          amountReceived: Number(item.invoice?.amount || 0) - Number(item.balance || 0),
+          amountReceived:
+            Number(item.invoice?.amount || 0) - Number(item.balance || 0),
           outstandingBalance: item.balance || "0",
         }));
 
@@ -101,7 +104,7 @@ export default function ReceivablesBreakdownPage() {
   }, [token]);
 
   const filteredReceivables = receivables.filter((item) =>
-    item.clientName.toLowerCase().includes(searchQuery.toLowerCase())
+    item.clientName.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -118,14 +121,22 @@ export default function ReceivablesBreakdownPage() {
               Receivables Breakdown
             </h2>
           </div>
-          <div className="relative w-full flex items-center sm:w-72">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search by client name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A6DC0] w-full"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full flex items-center sm:w-72">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search by client name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A6DC0] w-full"
+              />
+            </div>
+            <Button
+              onClick={() => router.push("/client-payment")}
+              className="bg-[#FAB435]/30 text-[#E89500]"
+            >
+              Record Payment +
+            </Button>
           </div>
         </div>
 

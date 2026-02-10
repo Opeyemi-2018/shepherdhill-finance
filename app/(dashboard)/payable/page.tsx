@@ -9,6 +9,8 @@ import HeaderContent from "@/components/HeaderContent";
 import { useAuth } from "@/context/user";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { PayableDetailModal } from "./chunks/PayableModal";
+import { AddVendorModal } from "./chunks/Addvendors";
 
 interface Payable {
   id: number;
@@ -22,9 +24,10 @@ const TableSkeleton = () => (
   <>
     {[1, 2, 3, 4, 5].map((i) => (
       <tr key={i}>
-        <td colSpan={4} className="py-5">
+        <td colSpan={5} className="py-5">
           <div className="flex gap-4 animate-pulse">
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/5"></div>
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/5"></div>
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/5"></div>
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/5"></div>
@@ -38,10 +41,17 @@ const TableSkeleton = () => (
 export default function PayablesOverviewPage() {
   const { token } = useAuth();
   const router = useRouter();
+
   const [payables, setPayables] = useState<Payable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Modal state for payable details
+  const [selectedPayableId, setSelectedPayableId] = useState<number | null>(
+    null,
+  );
+  const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchPayables = async () => {
@@ -82,7 +92,6 @@ export default function PayablesOverviewPage() {
           throw new Error(json.message || "Invalid response format");
         }
 
-        // Correct mapping: json.data.data is the array
         const mapped: Payable[] = json.data.data.map((item: any) => ({
           id: item.id,
           vendorName: item.vendor?.name || "Unknown Vendor",
@@ -145,6 +154,26 @@ export default function PayablesOverviewPage() {
     );
   };
 
+  const handlePreview = (id: number) => {
+    setSelectedPayableId(id);
+    setModalOpen(true);
+  };
+
+  const handleStatusChange = () => {
+    // Refresh table after approve
+    setPayables((prev) =>
+      prev.map((p) =>
+        p.id === selectedPayableId ? { ...p, status: "approved" } : p,
+      ),
+    );
+  };
+
+  // Optional: refresh vendors after adding new one (if you fetch vendors elsewhere)
+  const handleVendorCreated = () => {
+    // If you have a vendors list or refetch logic here, trigger it
+    toast.success("New vendor added — you can now select it");
+  };
+
   return (
     <div className="">
       <HeaderContent
@@ -156,10 +185,10 @@ export default function PayablesOverviewPage() {
         <div className="flex flex-col justify-between mb-4 sm:flex-row">
           <div className="mb-4">
             <h2 className="text-[14px] font-bold text-[#3A3A3A] font-dm-sans border-b-2 border-[#FAB435] inline-block pb-1">
-              Payables Overview
+              Payment Info
             </h2>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-full flex items-center sm:w-72">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -169,18 +198,26 @@ export default function PayablesOverviewPage() {
                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0A6DC0] w-full"
               />
             </div>
+
             <Button
-              onClick={() => router.push("/vendor-payment")}
+              onClick={() => router.push("/record-vendors-payment")}
               className="bg-[#FAB435]/30 text-[#E89500]"
             >
-              Record Payment +
+              Record Vendor Payment
             </Button>
-            <Button
-              onClick={() => router.push("/payment-approval")}
-              className="bg-[#FAB435]/30 text-[#E89500]"
-            >
-              Payment Approval
-            </Button>
+
+            {/* Add Vendor Button + Modal */}
+            <AddVendorModal
+              trigger={
+                <Button
+                  variant="outline"
+                  className="border-[#FAB435]/30 text-[#E89500]"
+                >
+                  Add Vendor
+                </Button>
+              }
+              onVendorCreated={handleVendorCreated}
+            />
           </div>
         </div>
 
@@ -200,6 +237,9 @@ export default function PayablesOverviewPage() {
                 <th className="py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase whitespace-nowrap tracking-wider">
                   Expense Date
                 </th>
+                <th className="py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase whitespace-nowrap tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#979797]/30">
@@ -207,14 +247,14 @@ export default function PayablesOverviewPage() {
                 <TableSkeleton />
               ) : error ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-red-600">
+                  <td colSpan={5} className="py-8 text-center text-red-600">
                     {error}
                   </td>
                 </tr>
               ) : filteredPayables.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="py-12 text-center text-[#9E9A9A] font-dm-sans"
                   >
                     No payables found matching your search
@@ -239,6 +279,16 @@ export default function PayablesOverviewPage() {
                         year: "numeric",
                       })}
                     </td>
+                    <td>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="bg-[#FAB435]/10 hover:bg-[#FAB435]/20 text-[#E89500] border-[#FAB435]/30"
+                        onClick={() => handlePreview(item.id)}
+                      >
+                        Preview
+                      </Button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -246,7 +296,7 @@ export default function PayablesOverviewPage() {
           </table>
         </div>
 
-        {/* Pagination – placeholder */}
+        {/* Pagination placeholder */}
         <div className="flex items-center justify-center sm:justify-end gap-2 mt-8">
           <Button variant="outline" size="icon" className="h-8 w-8" disabled>
             <ChevronLeft className="h-4 w-4" />
@@ -276,6 +326,14 @@ export default function PayablesOverviewPage() {
           </Button>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      <PayableDetailModal
+        payableId={selectedPayableId}
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        onStatusChange={handleStatusChange}
+      />
     </div>
   );
 }

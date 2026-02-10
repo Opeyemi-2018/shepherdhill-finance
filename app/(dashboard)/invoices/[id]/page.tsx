@@ -1,15 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { IoChevronBackOutline } from "react-icons/io5";
-import {  Loader2 } from "lucide-react"; // ← add Loader2
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/user";
-import { fetchInvoiceDetailAction, sendInvoiceAction } from "@/actions/invoice";
+import { sendInvoiceAction } from "@/actions/invoice";
 import { FaUserLarge } from "react-icons/fa6";
+import { useInvoiceDetail } from "@/hooks/useInvoice";
+import { useState } from "react";
 
 export default function InvoiceDetailPage() {
   const params = useParams();
@@ -18,35 +19,9 @@ export default function InvoiceDetailPage() {
 
   const invoiceId = params.id as string;
 
-  const [invoice, setInvoice] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { invoice, loading, error, refetch } = useInvoiceDetail(invoiceId);
 
-  // Separate loading state for Send button
   const [isSending, setIsSending] = useState(false);
-
-  useEffect(() => {
-    const loadInvoice = async () => {
-      if (!token) {
-        setError("Please log in to view this invoice");
-        setLoading(false);
-        return;
-      }
-
-      const result = await fetchInvoiceDetailAction(invoiceId, token);
-
-      if (!result.success) {
-        setError(result.error || "Failed to load invoice");
-        setLoading(false);
-        return;
-      }
-
-      setInvoice(result.data);
-      setLoading(false);
-    };
-
-    loadInvoice();
-  }, [invoiceId, token]);
 
   const handleSendInvoice = async () => {
     if (!token) {
@@ -70,9 +45,7 @@ export default function InvoiceDetailPage() {
       }
 
       toast.success(result.message || "Invoice sent successfully!");
-      
-      // Optional: refresh data or page
-      router.refresh();
+      refetch(); // refresh detail
     } catch (err: any) {
       toast.error(err.message || "An error occurred while sending");
     } finally {
