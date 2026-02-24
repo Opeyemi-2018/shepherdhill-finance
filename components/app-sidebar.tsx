@@ -68,6 +68,16 @@ const items: MenuItem[] = [
     url: "/report",
     icon: Settings,
   },
+  {
+    title: "SOP Generator",
+    url: "/sop",
+    icon: Settings,
+  },
+  {
+    title: "Settings",
+    url: "/settings",
+    icon: Settings,
+  },
 ];
 
 export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
