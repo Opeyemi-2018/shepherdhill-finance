@@ -120,7 +120,7 @@ export default function CreateStatementPage() {
       </div>
 
       <div className="bg-primary-foreground shadow-lg rounded-lg p-6 md:p-8">
-        <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto">
+        <form onSubmit={handleSubmit} className="space-y-6 ">
           {/* Client Selection - Shadcn Select */}
           <div className="space-y-2">
             <Label htmlFor="client">Select Client *</Label>
@@ -171,7 +171,7 @@ export default function CreateStatementPage() {
 
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
+            <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               value={description}

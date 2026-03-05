@@ -1,6 +1,15 @@
 "use client";
 
-import { LayoutDashboard, Briefcase, Settings, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Briefcase,
+  NotepadText,
+  LogOut,
+  HandCoins,
+  Banknote,
+  BookText,
+  Settings,
+} from "lucide-react";
 
 import {
   AlertDialog,
@@ -51,28 +60,28 @@ const items: MenuItem[] = [
   {
     title: "Statement",
     url: "/statement",
-    icon: Settings,
+    icon: NotepadText,
   },
   {
     title: "Receivable",
     url: "/receiviable",
-    icon: Settings,
+    icon: HandCoins,
   },
   {
     title: "Payable",
     url: "/payable",
-    icon: Settings,
+    icon: Banknote,
   },
   {
     title: "Report",
     url: "/report",
-    icon: Settings,
+    icon: BookText,
   },
-  {
-    title: "SOP Generator",
-    url: "/sop",
-    icon: Settings,
-  },
+  // {
+  //   title: "SOP Generator",
+  //   url: "/sop",
+  //   icon: Settings,
+  // },
   {
     title: "Settings",
     url: "/settings",

@@ -100,10 +100,9 @@ export default function UpdateProfileTab() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_CLIENT_URL}/profile/update`,
         {
-          method: "POST", // or "PATCH" if your backend uses PATCH for updates
+          method: "POST", 
           headers: {
             Authorization: `Bearer ${token}`,
-            // Do NOT set Content-Type — browser sets multipart/form-data automatically with FormData
           },
           body: formData,
         },

@@ -146,26 +146,26 @@ const Overview = () => {
           <h2 className="md:font-bold md:text-[24px]">Create Invoice</h2>
         </button>
         <button
-          onClick={() => router.push("/statements/create")}
+          onClick={() => router.push("/create-statement")}
           className="bg-primary-foreground shadow-lg p-3 rounded-lg flex flex-col items-center justify-center md:h-[100px]"
         >
           <FaUserAlt color="#FAB435" />
           <h2 className="md:font-bold md:text-[24px]">Upload Statement</h2>
         </button>
         <button
-          onClick={() => router.push("/record-vendor-payment")}
+          onClick={() => router.push("/record-vendors-payment")}
           className="bg-primary-foreground shadow-lg p-3 rounded-lg flex flex-col items-center justify-center md:h-[100px]"
         >
           <FaUserAlt color="#FAB435" />
           <h2 className="md:font-bold md:text-[24px]">Record Payment</h2>
         </button>
-        <button
+        {/* <button
           onClick={() => router.push("/create-invoice")}
           className="bg-primary-foreground shadow-lg p-3 rounded-lg flex flex-col items-center justify-center md:h-[100px]"
         >
           <FaUserAlt color="#FAB435" />
           <h2 className="md:font-bold md:text-[24px]">Generate Report</h2>
-        </button>
+        </button> */}
       </div>
 
       <div className="mt-4">
