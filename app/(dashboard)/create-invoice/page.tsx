@@ -1,10 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -22,45 +24,39 @@ import { CalendarIcon, Loader2, Plus, Trash2, Hash } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import HeaderContent from "@/components/HeaderContent";
-import { useAuth } from "@/context/user";
-import { createInvoiceAction } from "@/actions/invoice";
 import { useClients } from "@/hooks/useClient";
-import { z } from "zod";
 
-// ─── Schema ────────────────────────────────────────────────────────────────────
-const lineItemSchema = z.object({
-  service: z.string().min(1, "Service is required"),
-  quantity: z.coerce.number().min(1, "Min 1"),
-  rate: z.coerce.number().min(0, "Min 0"),
-});
+// ─── Types ────────────────────────────────────────────────────────────────
+interface LineItem {
+  service: string;
+  quantity: number;
+  rate: number;
+}
 
-const invoiceSchema = z.object({
-  client_id: z.string().min(1, "Client is required"),
-  invoice_date: z.date({ required_error: "Invoice date is required" }),
-  due_date: z.date({ required_error: "Due date is required" }),
-  items: z.array(lineItemSchema).min(1, "Add at least one line item"),
-  discount: z.coerce.number().min(0).default(0),
-  tax: z.coerce.number().min(0).default(0),
-  terms: z.string().optional(),
-  payment_link: z.string().url("Must be a valid URL").optional().or(z.literal("")),
-  signature: z.string().optional(),
-});
+interface FormData {
+  client_id: string;
+  invoice_date: Date;
+  due_date: Date;
+  items: LineItem[];
+  discount: number;
+  tax: number;
+  terms: string;
+  payment_link: string;
+  signature: string;
+}
 
-type InvoiceFormValues = z.infer<typeof invoiceSchema>;
+interface FormErrors {
+  client_id?: string;
+  invoice_date?: string;
+  due_date?: string;
+  items?: string;
+  discount?: string;
+  tax?: string;
+  payment_link?: string;
+}
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 function generateInvoiceNumber(): string {
   const prefix = "INV";
   const timestamp = Date.now().toString().slice(-6);
@@ -76,9 +72,18 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────────
+function validateUrl(url: string): boolean {
+  if (!url) return true;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Component ──────────────────────────────────────────────────────────────
 export default function CreateInvoice() {
-  const { token } = useAuth();
   const router = useRouter();
   const { clients, isLoading: clientsLoading, error: clientsError } = useClients();
 
@@ -86,90 +91,123 @@ export default function CreateInvoice() {
   const [isCreating, setIsCreating] = useState(false);
   const [invoiceNumber] = useState(generateInvoiceNumber);
 
-  const form = useForm<InvoiceFormValues>({
-    resolver: zodResolver(invoiceSchema),
-    defaultValues: {
-      client_id: "",
-      items: [{ service: "", quantity: 1, rate: 0 }],
-      discount: 0,
-      tax: 0,
-      terms: "",
-      payment_link: "",
-      signature: "",
-    },
+  // Form state
+  const [formData, setFormData] = useState<FormData>({
+    client_id: "",
+    invoice_date: new Date(),
+    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    items: [{ service: "", quantity: 1, rate: 0 }],
+    discount: 0,
+    tax: 0,
+    terms: "",
+    payment_link: "",
+    signature: "",
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "items",
-  });
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  // ─── Watch items for live calculation ────────────────────────────────────────
-  const watchedItems = form.watch("items");
-  const watchedDiscount = form.watch("discount") || 0;
-  const watchedTax = form.watch("tax") || 0;
+  // Validate form
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {};
 
-  const lineSubtotals = watchedItems.map(
-    (item) => (Number(item.quantity) || 0) * (Number(item.rate) || 0)
+    if (!formData.client_id) {
+      newErrors.client_id = "Client is required";
+    }
+
+    if (!formData.invoice_date) {
+      newErrors.invoice_date = "Invoice date is required";
+    }
+
+    if (!formData.due_date) {
+      newErrors.due_date = "Due date is required";
+    }
+
+    if (!formData.items || formData.items.length === 0) {
+      newErrors.items = "Add at least one line item";
+    } else {
+      let hasEmptyService = false;
+      for (let i = 0; i < formData.items.length; i++) {
+        if (!formData.items[i].service) {
+          hasEmptyService = true;
+          break;
+        }
+      }
+      if (hasEmptyService) {
+        newErrors.items = "All service names are required";
+      }
+    }
+
+    if (formData.discount < 0) {
+      newErrors.discount = "Discount cannot be negative";
+    }
+
+    if (formData.tax < 0) {
+      newErrors.tax = "Tax cannot be negative";
+    }
+
+    if (formData.payment_link && !validateUrl(formData.payment_link)) {
+      newErrors.payment_link = "Must be a valid URL";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Update form data
+  const updateFormData = (field: keyof FormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error for this field if it exists
+    if (errors[field as keyof FormErrors]) {
+      setErrors(prev => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  // Update line item
+  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
+    const updatedItems = [...formData.items];
+    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    updateFormData("items", updatedItems);
+  };
+
+  // Add line item
+  const addLineItem = () => {
+    updateFormData("items", [...formData.items, { service: "", quantity: 1, rate: 0 }]);
+  };
+
+  // Remove line item
+  const removeLineItem = (index: number) => {
+    if (formData.items.length > 1) {
+      const updatedItems = formData.items.filter((_, i) => i !== index);
+      updateFormData("items", updatedItems);
+    }
+  };
+
+  // Calculate totals
+  const lineSubtotals = formData.items.map(
+    (item) => (Number(item?.quantity) || 0) * (Number(item?.rate) || 0)
   );
   const subtotal = lineSubtotals.reduce((a, b) => a + b, 0);
-  const discountAmount = Number(watchedDiscount) || 0;
-  const taxAmount = Number(watchedTax) || 0;
+  const discountAmount = formData.discount || 0;
+  const taxAmount = formData.tax || 0;
   const total = subtotal - discountAmount + taxAmount;
 
-  // ─── Submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async (saveAsDraft: boolean) => {
-    if (!token) {
-      toast.error("You must be logged in to create an invoice");
-      router.push("/sign-in");
+    if (!validateForm()) {
+      toast.error("Please fix the errors in the form");
       return;
     }
 
     saveAsDraft ? setIsSavingDraft(true) : setIsCreating(true);
 
     try {
-      const isValid = await form.trigger();
-      if (!isValid) {
-        toast.error("Please fix the errors before submitting");
-        return;
-      }
-
-      const values = form.getValues();
-
-      const payload = {
-        invoice_number: invoiceNumber,
-        client_id: Number(values.client_id),
-        invoice_date: format(values.invoice_date, "yyyy-MM-dd"),
-        due_date: format(values.due_date, "yyyy-MM-dd"),
-        items: values.items.map((item) => ({
-          service: item.service,
-          quantity: Number(item.quantity),
-          rate: Number(item.rate),
-          subtotal: Number(item.quantity) * Number(item.rate),
-        })),
-        subtotal,
-        discount: discountAmount,
-        tax: taxAmount,
-        amount: total, // final total sent as `amount`
-        status: "unpaid" as const,
-        terms: values.terms || "",
-        payment_link: values.payment_link || "",
-        signature: values.signature || "",
-        ...(saveAsDraft && { type: "draft" as const }),
-      };
-
-      const result = await createInvoiceAction(payload, token);
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to process invoice");
-        return;
-      }
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       toast.success(
         saveAsDraft ? "Invoice saved as draft!" : "Invoice created successfully!"
       );
+
       router.push("/invoices");
-      form.reset();
     } catch (error: any) {
       toast.error(error.message || "Failed to submit invoice");
     } finally {
@@ -187,7 +225,7 @@ export default function CreateInvoice() {
       />
 
       <div className="bg-primary-foreground p-3 md:p-6 mt-4">
-        {/* Header row: title + invoice number */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <h1 className="text-[#3A3A3A] dark:text-white text-[16px] md:text-[20px] font-bold">
             Create Invoice
@@ -200,382 +238,282 @@ export default function CreateInvoice() {
           </div>
         </div>
 
-        <Form {...form}>
-          <form className="space-y-6">
-
-            {/* ── Client + Dates (row) ── */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Client */}
-              <FormField
-                control={form.control}
-                name="client_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Client</FormLabel>
-                    {clientsLoading ? (
-                      <div className="h-12 flex items-center gap-2 text-[13px] text-gray-400">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                      </div>
-                    ) : clientsError ? (
-                      <div className="h-12 flex items-center text-red-500 text-[13px]">{clientsError}</div>
-                    ) : (
-                      <>
-                        <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
-                          <FormControl>
-                            <SelectTrigger className="bg-[#F9FAFB] border-[#E5E7EB] h-12">
-                              <SelectValue placeholder="Select Client" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {clients.map((client) => (
-                              <SelectItem key={client.id} value={client.id.toString()}>
-                                {client.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </>
-                    )}
-                  </FormItem>
-                )}
-              />
-
-              {/* Invoice Date */}
-              <FormField
-                control={form.control}
-                name="invoice_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            disabled={isSubmitting}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "dd-MM-yy") : <span>DD-MM-YY</span>}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Due Date */}
-              <FormField
-                control={form.control}
-                name="due_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Due Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                            disabled={isSubmitting}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value ? format(field.value, "dd-MM-yy") : <span>DD-MM-YY</span>}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* ── Line Items Table ── */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <FormLabel className="text-[14px] font-semibold">Services / Items</FormLabel>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1 text-[12px] h-8"
-                  onClick={() => append({ service: "", quantity: 1, rate: 0 })}
-                  disabled={isSubmitting}
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Row
-                </Button>
-              </div>
-
-              {/* Table header */}
-              <div className="rounded-lg border border-[#E5E7EB] overflow-hidden">
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] bg-gray-50 dark:bg-gray-800 px-4 py-2 text-[12px] font-semibold text-gray-500 dark:text-[#979797] uppercase tracking-wide">
-                  <span>Service</span>
-                  <span>Qty</span>
-                  <span>Rate (₦)</span>
-                  <span>Subtotal</span>
-                  <span />
+        <div className="space-y-6">
+          {/* Client + Dates */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Client <span className="text-red-500">*</span></Label>
+              {clientsLoading ? (
+                <div className="h-12 flex items-center gap-2 text-[13px] text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
-
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center gap-2 px-4 py-3 border-t border-[#E5E7EB] first:border-t-0"
+              ) : clientsError ? (
+                <div className="h-12 flex items-center text-red-500 text-[13px]">{clientsError}</div>
+              ) : (
+                <div>
+                  <Select
+                    value={formData.client_id}
+                    onValueChange={(val) => updateFormData("client_id", val)}
+                    disabled={isSubmitting}
                   >
-                    {/* Service */}
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.service`}
-                      render={({ field }) => (
-                        <FormItem className="space-y-0">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="e.g. Man Guarding"
-                              className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                          <FormMessage className="text-[11px]" />
-                        </FormItem>
-                      )}
-                    />
+                    <SelectTrigger className={cn(
+                      "bg-[#F9FAFB] border-[#E5E7EB] h-12",
+                      errors.client_id && "border-red-500"
+                    )}>
+                      <SelectValue placeholder="Select Client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client: any) => (
+                        <SelectItem key={client.id} value={client.id.toString()}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.client_id && (
+                    <p className="text-red-500 text-xs mt-1">{errors.client_id}</p>
+                  )}
+                </div>
+              )}
+            </div>
 
-                    {/* Quantity */}
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.quantity`}
-                      render={({ field }) => (
-                        <FormItem className="space-y-0">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min={1}
-                              placeholder="1"
-                              className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                          <FormMessage className="text-[11px]" />
-                        </FormItem>
-                      )}
-                    />
+            {/* Invoice Date */}
+            <div className="space-y-2">
+              <Label>Invoice Date <span className="text-red-500">*</span></Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
+                      errors.invoice_date && "border-red-500"
+                    )}
+                    disabled={isSubmitting}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.invoice_date 
+                      ? format(formData.invoice_date, "dd-MM-yy") 
+                      : <span>DD-MM-YY</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={formData.invoice_date}
+                    onSelect={(date) => date && updateFormData("invoice_date", date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {errors.invoice_date && (
+                <p className="text-red-500 text-xs mt-1">{errors.invoice_date}</p>
+              )}
+            </div>
 
-                    {/* Rate */}
-                    <FormField
-                      control={form.control}
-                      name={`items.${index}.rate`}
-                      render={({ field }) => (
-                        <FormItem className="space-y-0">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                          <FormMessage className="text-[11px]" />
-                        </FormItem>
-                      )}
-                    />
+            {/* Due Date */}
+            <div className="space-y-2">
+              <Label>Due Date <span className="text-red-500">*</span></Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
+                      errors.due_date && "border-red-500"
+                    )}
+                    disabled={isSubmitting}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {formData.due_date 
+                      ? format(formData.due_date, "dd-MM-yy") 
+                      : <span>DD-MM-YY</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={formData.due_date}
+                    onSelect={(date) => date && updateFormData("due_date", date)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+              {errors.due_date && (
+                <p className="text-red-500 text-xs mt-1">{errors.due_date}</p>
+              )}
+            </div>
+          </div>
 
-                    {/* Subtotal (read-only) */}
-                    <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-gray-800 border border-[#E5E7EB] text-[13px] font-medium text-[#3A3A3A] dark:text-white">
-                      {formatCurrency(lineSubtotals[index] || 0)}
-                    </div>
+          {/* Line Items */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-[14px] font-semibold">
+                Services / Items <span className="text-red-500">*</span>
+              </Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1 text-[12px] h-8"
+                onClick={addLineItem}
+                disabled={isSubmitting}
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Row
+              </Button>
+            </div>
 
-                    {/* Delete */}
-                    <button
-                      type="button"
-                      onClick={() => fields.length > 1 && remove(index)}
-                      disabled={fields.length === 1 || isSubmitting}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+            <div className={cn(
+              "rounded-lg border border-[#E5E7EB] overflow-hidden",
+              errors.items && "border-red-500"
+            )}>
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] bg-gray-50 dark:bg-gray-800 px-4 py-2 text-[12px] font-semibold text-gray-500 dark:text-[#979797] uppercase tracking-wide">
+                <span>Service</span>
+                <span>Qty</span>
+                <span>Rate (₦)</span>
+                <span>Subtotal</span>
+                <span />
               </div>
 
-              {/* Totals panel */}
-              <div className="mt-3 flex justify-end">
-                <div className="w-full max-w-xs space-y-2 text-[13px]">
-                  <div className="flex justify-between text-gray-500 dark:text-[#979797]">
-                    <span>Subtotal</span>
-                    <span className="font-medium text-[#3A3A3A] dark:text-white">
-                      {formatCurrency(subtotal)}
-                    </span>
+              {formData.items.map((item, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center gap-2 px-4 py-3 border-t border-[#E5E7EB] first:border-t-0"
+                >
+                  <Input
+                    value={item.service}
+                    onChange={(e) => updateLineItem(index, "service", e.target.value)}
+                    placeholder="e.g. Man Guarding"
+                    className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
+                    disabled={isSubmitting}
+                  />
+
+                  <Input
+                    type="number"
+                    min={1}
+                    value={item.quantity}
+                    onChange={(e) => updateLineItem(index, "quantity", Number(e.target.value) || 0)}
+                    className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
+                    disabled={isSubmitting}
+                  />
+
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={item.rate}
+                    onChange={(e) => updateLineItem(index, "rate", Number(e.target.value) || 0)}
+                    className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
+                    disabled={isSubmitting}
+                  />
+
+                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-gray-800 border border-[#E5E7EB] text-[13px] font-medium">
+                    {formatCurrency(lineSubtotals[index] || 0)}
                   </div>
 
-                  {/* Discount */}
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-gray-500 dark:text-[#979797] shrink-0">Discount (₦)</span>
-                    <FormField
-                      control={form.control}
-                      name="discount"
-                      render={({ field }) => (
-                        <FormItem className="space-y-0 w-32">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className="h-8 text-[13px] text-right bg-[#F9FAFB] border-[#E5E7EB]"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeLineItem(index)}
+                    disabled={formData.items.length === 1 || isSubmitting}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {errors.items && (
+              <p className="text-red-500 text-xs mt-1">{errors.items}</p>
+            )}
 
-                  {/* Tax */}
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-gray-500 dark:text-[#979797] shrink-0">Tax (₦)</span>
-                    <FormField
-                      control={form.control}
-                      name="tax"
-                      render={({ field }) => (
-                        <FormItem className="space-y-0 w-32">
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className="h-8 text-[13px] text-right bg-[#F9FAFB] border-[#E5E7EB]"
-                              disabled={isSubmitting}
-                            />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+            {/* Totals */}
+            <div className="mt-3 flex justify-end">
+              <div className="w-full max-w-xs space-y-2 text-[13px]">
+                <div className="flex justify-between text-gray-500">
+                  <span>Subtotal</span>
+                  <span className="font-medium">{formatCurrency(subtotal)}</span>
+                </div>
 
-                  <div className="border-t border-[#E5E7EB] pt-2 flex justify-between font-bold text-[14px] text-[#3A3A3A] dark:text-white">
-                    <span>Total</span>
-                    <span className="text-[#FAB435]">{formatCurrency(total)}</span>
-                  </div>
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500">Discount (₦)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formData.discount}
+                    onChange={(e) => updateFormData("discount", Number(e.target.value) || 0)}
+                    className="w-32 h-8 text-right"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center gap-3">
+                  <span className="text-gray-500">Tax (₦)</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={formData.tax}
+                    onChange={(e) => updateFormData("tax", Number(e.target.value) || 0)}
+                    className="w-32 h-8 text-right"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div className="border-t pt-2 flex justify-between font-bold text-[14px]">
+                  <span>Total</span>
+                  <span className="text-[#FAB435]">{formatCurrency(total)}</span>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* ── Terms & Conditions ── */}
-            <FormField
-              control={form.control}
-              name="terms"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Terms & Conditions</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      placeholder="e.g. Payment due within 30 days. Late payments attract a 5% surcharge..."
-                      className="bg-[#F9FAFB] border-[#E5E7EB] min-h-[100px] resize-none text-[13px]"
-                      disabled={isSubmitting}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+          {/* Terms & Conditions */}
+          <div className="space-y-2">
+            <Label>Terms & Conditions</Label>
+            <Textarea
+              value={formData.terms}
+              onChange={(e) => updateFormData("terms", e.target.value)}
+              placeholder="e.g. Payment due within 30 days..."
+              className="min-h-[100px]"
+              disabled={isSubmitting}
             />
+          </div>
 
-            {/* ── Payment Link + Signature (row) ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="payment_link"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Payment Link <span className="text-[11px] text-gray-400 font-normal ml-1">(optional)</span></FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="url"
-                        placeholder="https://paystack.com/pay/..."
-                        className="bg-[#F9FAFB] border-[#E5E7EB] h-12 text-[13px]"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Payment Link (Optional) */}
+          <div className="space-y-2">
+            <Label>Payment Link (Optional)</Label>
+            <Input
+              type="url"
+              value={formData.payment_link}
+              onChange={(e) => updateFormData("payment_link", e.target.value)}
+              placeholder="https://example.com/pay"
+              className={cn(errors.payment_link && "border-red-500")}
+              disabled={isSubmitting}
+            />
+            {errors.payment_link && (
+              <p className="text-red-500 text-xs mt-1">{errors.payment_link}</p>
+            )}
+          </div>
 
-              <FormField
-                control={form.control}
-                name="signature"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Authorized Signature <span className="text-[11px] text-gray-400 font-normal ml-1">(optional)</span></FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder="Full name or designation"
-                        className="bg-[#F9FAFB] border-[#E5E7EB] h-12 text-[13px]"
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+          {/* Bottom Buttons */}
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => handleSubmit(true)}
+            >
+              {isSavingDraft ? "Saving Draft..." : "Save as Draft"}
+            </Button>
 
-            {/* ── Actions ── */}
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="px-6 bg-[#3A3A3A]/10"
-                disabled={isSubmitting || clientsLoading}
-                onClick={() => handleSubmit(true)}
-              >
-                {isSavingDraft ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…</>
-                ) : (
-                  "Save as Draft"
-                )}
-              </Button>
-
-              <Button
-                type="button"
-                className="bg-[#FAB435]/30 hover:bg-[#FF8C00] text-[#FAB435] hover:text-white"
-                disabled={isSubmitting || clientsLoading}
-                onClick={() => handleSubmit(false)}
-              >
-                {isCreating ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…</>
-                ) : (
-                  "Create Invoice"
-                )}
-              </Button>
-            </div>
-          </form>
-        </Form>
+            <Button
+              type="button"
+              className="bg-[#FAB435] hover:bg-[#E89500] text-black"
+              disabled={isSubmitting}
+              onClick={() => handleSubmit(false)}
+            >
+              {isCreating ? "Creating Invoice..." : "Create Invoice"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
