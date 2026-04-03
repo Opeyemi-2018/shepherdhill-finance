@@ -21,12 +21,31 @@ import {
 } from "@/components/ui/select";
 import { Client, useClients } from "@/hooks/useClient";
 
+// Dummy Bank List (you can later fetch from API if needed)
+const BANKS = [
+  "Access Bank",
+  "First Bank Nigeria",
+  "GTBank",
+  "Zenith Bank",
+  "UBA",
+  "Fidelity Bank",
+  "Stanbic IBTC",
+  "Ecobank",
+  "Polaris Bank",
+  "Union Bank",
+  "Sterling Bank",
+  "Wema Bank",
+  "Heritage Bank",
+  "Keystone Bank",
+];
+
 export default function CreateStatementPage() {
   const router = useRouter();
   const { token } = useAuth();
   const { clients, isLoading: clientsLoading, error: clientsError } = useClients();
 
   const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedBank, setSelectedBank] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -50,6 +69,11 @@ export default function CreateStatementPage() {
       return;
     }
 
+    if (!selectedBank) {
+      toast.error("Please select a bank");
+      return;
+    }
+
     if (!file) {
       toast.error("Please upload a statement file");
       return;
@@ -60,6 +84,7 @@ export default function CreateStatementPage() {
     try {
       const formData = new FormData();
       formData.append("client_id", selectedClientId);
+      formData.append("bank", selectedBank);           // ← Added Bank
       formData.append("file", file);
       if (description.trim()) {
         formData.append("description", description.trim());
@@ -88,7 +113,6 @@ export default function CreateStatementPage() {
 
       toast.success(json.message || "Statement uploaded successfully!");
 
-      // Redirect to statements list
       router.push("/statement");
     } catch (err: any) {
       console.error("Statement upload error:", err);
@@ -120,8 +144,9 @@ export default function CreateStatementPage() {
       </div>
 
       <div className="bg-primary-foreground shadow-lg rounded-lg p-6 md:p-8">
-        <form onSubmit={handleSubmit} className="space-y-6 ">
-          {/* Client Selection - Shadcn Select */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* Client Selection */}
           <div className="space-y-2">
             <Label htmlFor="client">Select Client *</Label>
             {clientsLoading ? (
@@ -151,6 +176,27 @@ export default function CreateStatementPage() {
                 </SelectContent>
               </Select>
             )}
+          </div>
+
+          {/* Bank Selection - NEW */}
+          <div className="space-y-2">
+            <Label htmlFor="bank">Select Bank *</Label>
+            <Select
+              value={selectedBank}
+              onValueChange={setSelectedBank}
+              required
+            >
+              <SelectTrigger className="w-full h-12">
+                <SelectValue placeholder="Select Bank" />
+              </SelectTrigger>
+              <SelectContent>
+                {BANKS.map((bank) => (
+                  <SelectItem key={bank} value={bank}>
+                    {bank}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* File Upload */}
@@ -186,7 +232,7 @@ export default function CreateStatementPage() {
             <Button
               type="submit"
               disabled={uploading || clientsLoading}
-              className="bg-[#FAB435]/30  text-[#E89500] px-8 py-6"
+              className="bg-[#FAB435]/30 text-[#E89500] px-8 py-6"
             >
               {uploading ? (
                 <>

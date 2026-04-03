@@ -4,7 +4,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { IoChevronBackOutline } from "react-icons/io5";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/user";
 import { FaUserLarge } from "react-icons/fa6";
@@ -24,7 +24,6 @@ interface StatementDetail {
     name: string;
     email: string;
     address: string;
-    // ... other fields if needed
   };
   creator: {
     id: number;
@@ -90,17 +89,51 @@ export default function StatementDetailPage() {
     fetchStatement();
   }, [statementId, token]);
 
+  // ── Download Statement as Text File ─────────────────────────────────────
   const handleDownload = () => {
-    if (!statement?.attachment) {
-      toast.error("No attachment available");
+    if (!statement) {
+      toast.error("No statement data available");
       return;
     }
 
-    const url = statement.attachment.startsWith("http")
-      ? statement.attachment
-      : `${process.env.NEXT_PUBLIC_API_URL}/${statement.attachment}`;
+    const content = `
+STATEMENT DETAILS
+=================
 
-    window.open(url, "_blank");
+Statement ID     : STM-${statement.id}
+Client Name      : ${statement.client.name}
+Client Email     : ${statement.client.email}
+Client Address   : ${statement.client.address}
+Status           : ${statement.status.toUpperCase()}
+Created At       : ${new Date(statement.created_at).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+Updated At       : ${new Date(statement.updated_at).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+
+Description:
+${statement.description || "No description provided."}
+
+Attachment:
+${statement.attachment ? statement.attachment : "No attachment available"}
+    `.trim();
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Statement_STM-${statement.id}_${statement.client.name.replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success("Statement downloaded successfully");
   };
 
   const getStatusColor = (status: string) => {
@@ -143,6 +176,7 @@ export default function StatementDetailPage() {
           >
             <IoChevronBackOutline className="h-5 w-5" />
           </Button>
+
           <div className="flex items-center gap-2">
             <FaUserLarge className="bg-primary-foreground dark:bg-transparent text-[#FAB435] rounded-full p-2 w-12 h-12" />
             <div>
@@ -159,10 +193,10 @@ export default function StatementDetailPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            className="whitespace-nowrap"
+            className="whitespace-nowrap flex items-center gap-2"
             onClick={handleDownload}
-            disabled={!statement.attachment}
           >
+            <Download className="h-4 w-4" />
             Download Statement
           </Button>
         </div>

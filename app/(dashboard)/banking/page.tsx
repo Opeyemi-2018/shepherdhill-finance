@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import HeaderContent from "@/components/HeaderContent";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/user";
 import { cn } from "@/lib/utils";
@@ -79,7 +79,7 @@ export default function StatementTable() {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-          },
+          }
         );
 
         if (!res.ok) {
@@ -116,11 +116,49 @@ export default function StatementTable() {
   });
 
   const handleViewStatement = (id: number) => {
-    router.push(`/statement/${id}`);
+    router.push(`/banking/${id}`);
   };
 
   const handleAddStatement = () => {
-    router.push("/create-statement"); 
+    router.push("/create-statement");
+  };
+
+  // ── Download Statement Details ─────────────────────────────────────
+  const handleDownload = (stmt: Statement) => {
+    const content = `
+STATEMENT DETAILS
+=================
+
+Statement ID     : STM-${stmt.id}
+Client Name      : ${stmt.client?.name || "Unknown"}
+Description      : ${stmt.description || "No description"}
+Status           : ${stmt.status.toUpperCase()}
+Created At       : ${new Date(stmt.created_at).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+Updated At       : ${new Date(stmt.updated_at).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+
+Attachment URL:
+${stmt.attachment || "No attachment available"}
+    `.trim();
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Statement_STM-${stmt.id}_${(stmt.client?.name || "Client").replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success(`Downloaded Statement STM-${stmt.id}`);
   };
 
   const formatDate = (dateStr: string) => {
@@ -145,7 +183,6 @@ export default function StatementTable() {
       <div className="bg-primary-foreground shadow-lg rounded-lg p-4 md:p-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 w-full md:w-auto overflow-x-auto">
-            {/* You can add tabs here later if needed, e.g. Active / Archived */}
             <button className="pb-2 px-4 text-sm font-medium border-b-2 border-[#FAB435] text-[#3A3A3A] dark:text-white">
               All Statements
             </button>
@@ -159,14 +196,12 @@ export default function StatementTable() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full sm:w-64"
             />
-            <div className="flex gap-2">
-              <Button
-                onClick={handleAddStatement}
-                className="bg-[#FAB435]/30  text-[#E89500] whitespace-nowrap"
-              >
-                Add Statement
-              </Button>
-            </div>
+            <Button
+              onClick={handleAddStatement}
+              className="bg-[#FAB435]/30 text-[#E89500] whitespace-nowrap"
+            >
+              Add Statement
+            </Button>
           </div>
         </div>
 
@@ -207,8 +242,7 @@ export default function StatementTable() {
                 filteredStatements.map((stmt) => (
                   <tr
                     key={stmt.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer"
-                    onClick={() => handleViewStatement(stmt.id)}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                   >
                     <td className="py-4 pl-3 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {`STM-${stmt.id.toString().padStart(4, "0")}`}
@@ -225,28 +259,37 @@ export default function StatementTable() {
                           "inline-flex px-2.5 py-1 text-xs font-medium rounded-full",
                           stmt.status === "active"
                             ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-700",
+                            : "bg-gray-100 text-gray-700"
                         )}
                       >
-                        {stmt.status?.charAt(0).toUpperCase() +
-                          stmt.status?.slice(1) || "Unknown"}
+                        {stmt.status?.charAt(0).toUpperCase() + stmt.status?.slice(1) || "Unknown"}
                       </span>
                     </td>
                     <td className="py-4 whitespace-nowrap text-sm text-[#3A3A3A] dark:text-[#979797]">
                       {formatDate(stmt.created_at)}
                     </td>
-                    <td className="py-4 whitespace-nowrap text-sm font-medium">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-[#E89500]  hover:bg-blue-50"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewStatement(stmt.id);
-                        }}
-                      >
-                        View
-                      </Button>
+                    <td className="py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-[#E89500] hover:bg-blue-50"
+                          onClick={() => handleViewStatement(stmt.id)}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-[#E89500] hover:bg-amber-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(stmt);
+                          }}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

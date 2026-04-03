@@ -53,13 +53,23 @@ const items: MenuItem[] = [
     icon: LayoutDashboard,
   },
   {
+    title: "Service",
+    url: "/services",
+    icon: Briefcase,
+  },
+  {
     title: "Invoices",
     url: "/invoices",
     icon: Briefcase,
   },
   {
-    title: "Statement",
-    url: "/statement",
+    title: "Service Requests",
+    url: "/service-request",
+    icon: Briefcase,
+  },
+  {
+    title: "Banking",
+    url: "/banking",
     icon: NotepadText,
   },
   {

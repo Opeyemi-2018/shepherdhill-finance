@@ -4,13 +4,13 @@
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { IoChevronBackOutline } from "react-icons/io5";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/user";
-import { sendInvoiceAction } from "@/actions/invoice";
 import { FaUserLarge } from "react-icons/fa6";
 import { useInvoiceDetail } from "@/hooks/useInvoice";
 import { useState } from "react";
+import { sendInvoiceAction } from "@/actions/invoice";
 
 export default function InvoiceDetailPage() {
   const params = useParams();
@@ -45,11 +45,66 @@ export default function InvoiceDetailPage() {
       }
 
       toast.success(result.message || "Invoice sent successfully!");
-      refetch(); // refresh detail
+      refetch();
     } catch (err: any) {
       toast.error(err.message || "An error occurred while sending");
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // ── Download Invoice as Text File ─────────────────────────────────────
+  const handleDownload = () => {
+    if (!invoice) {
+      toast.error("No invoice data available");
+      return;
+    }
+
+    const content = `
+INVOICE DETAILS
+===============
+
+Invoice ID       : INV-${invoice.id}
+Client Name      : ${invoice.client.name}
+Client Email     : ${invoice.client.email}
+Invoice Date     : ${new Date(invoice.invoice_date).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+Due Date         : ${new Date(invoice.due_date).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+Amount           : ₦${Number(invoice.amount).toLocaleString()}
+Status           : ${invoice.status.toUpperCase()}
+
+Description:
+${invoice.description || "No description provided."}
+    `.trim();
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Invoice_INV-${invoice.id}_${invoice.client.name.replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success("Invoice downloaded successfully");
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "paid": return "text-green-600 dark:text-green-400";
+      case "sent":
+      case "partial": return "text-blue-600 dark:text-blue-400";
+      case "draft": return "text-gray-600 dark:text-gray-400";
+      case "overdue": return "text-red-600 dark:text-red-400";
+      default: return "text-gray-600 dark:text-gray-400";
     }
   };
 
@@ -69,17 +124,6 @@ export default function InvoiceDetailPage() {
       </div>
     );
   }
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case "paid": return "text-green-600 dark:text-green-400";
-      case "sent":
-      case "partial": return "text-blue-600 dark:text-blue-400";
-      case "draft": return "text-gray-600 dark:text-gray-400";
-      case "overdue": return "text-red-600 dark:text-red-400";
-      default: return "text-gray-600 dark:text-gray-400";
-    }
-  };
 
   return (
     <div className="pt-2 pb-8">
@@ -106,9 +150,15 @@ export default function InvoiceDetailPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" className="whitespace-nowrap">
+          <Button
+            variant="outline"
+            className="whitespace-nowrap flex items-center gap-2"
+            onClick={handleDownload}
+          >
+            <Download className="h-4 w-4" />
             Download Invoice
           </Button>
+
           <Button
             className="bg-[#FAB435] hover:bg-[#E89500] text-black hover:text-white whitespace-nowrap"
             onClick={handleSendInvoice}
