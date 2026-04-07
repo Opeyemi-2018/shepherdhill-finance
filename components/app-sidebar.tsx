@@ -9,6 +9,9 @@ import {
   Banknote,
   BookText,
   Settings,
+  FileText,
+  ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import {
@@ -32,7 +35,16 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from "@/components/ui/sidebar";
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -47,56 +59,19 @@ interface MenuItem {
 }
 
 const items: MenuItem[] = [
-  {
-    title: "Dashboard",
-    url: "/overview",
-    icon: LayoutDashboard,
-  },
-  {
-    title: "Service",
-    url: "/services",
-    icon: Briefcase,
-  },
-  {
-    title: "Invoices",
-    url: "/invoices",
-    icon: Briefcase,
-  },
-  {
-    title: "Service Requests",
-    url: "/service-request",
-    icon: Briefcase,
-  },
-  {
-    title: "Banking",
-    url: "/banking",
-    icon: NotepadText,
-  },
-  {
-    title: "Receivable",
-    url: "/receiviable",
-    icon: HandCoins,
-  },
-  {
-    title: "Payable",
-    url: "/payable",
-    icon: Banknote,
-  },
-  {
-    title: "Report",
-    url: "/report",
-    icon: BookText,
-  },
-  // {
-  //   title: "SOP Generator",
-  //   url: "/sop",
-  //   icon: Settings,
-  // },
-  {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
-  },
+  { title: "Dashboard", url: "/overview", icon: LayoutDashboard },
+  { title: "Service", url: "/services", icon: Briefcase },
+  { title: "Service Requests", url: "/service-request", icon: Briefcase },
+  { title: "Banking", url: "/banking", icon: NotepadText },
+  { title: "Receivable", url: "/receiviable", icon: HandCoins },
+  { title: "Payable", url: "/payable", icon: Banknote },
+  { title: "Report", url: "/report", icon: BookText },
+  { title: "Settings", url: "/settings", icon: Settings },
+];
+
+const invoiceSubItems = [
+  { title: "Invoice", url: "/invoices", icon: FileText },
+  { title: "Set Rate", url: "/set-rate", icon: SlidersHorizontal },
 ];
 
 export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
@@ -105,6 +80,7 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
   const { logout } = useAuth();
 
   const isActive = (url: string) => pathname === url;
+  const isInvoiceActive = pathname.startsWith("/invoices");
 
   return (
     <Sidebar collapsible="icon">
@@ -145,6 +121,47 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              {/* ── Invoices collapsible ── */}
+              <Collapsible defaultOpen={isInvoiceActive} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      className={`transition-all duration-200 hover:bg-[#FAB435]/30 hover:text-[#DC9E2E] hover:font-semibold dark:hover:bg-black dark:hover:text-[#FAB435] w-full ${
+                        isInvoiceActive
+                          ? "bg-[#FAB435]/30 text-[#DC9E2E] font-semibold dark:bg-black dark:text-[#FAB435]"
+                          : ""
+                      }`}
+                    >
+                      <Briefcase className="w-5 h-5" />
+                      <span>Invoices</span>
+                      <ChevronRight className="ml-auto w-4 h-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {invoiceSubItems.map((sub) => (
+                        <SidebarMenuSubItem key={sub.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            className={`transition-all duration-200 hover:bg-[#FAB435]/20 hover:text-[#DC9E2E] ${
+                              isActive(sub.url)
+                                ? "bg-[#FAB435]/20 text-[#DC9E2E] font-semibold"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            <Link href={sub.url} onClick={onLinkClick}>
+                              <sub.icon className="w-4 h-4" />
+                              <span>{sub.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -160,17 +177,13 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
                     <span className="text-[16px]">Logout Account</span>
                   </SidebarMenuButton>
                 </AlertDialogTrigger>
-
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Are you absolutely sure?
-                    </AlertDialogTitle>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This action will log you out of the system
                     </AlertDialogDescription>
                   </AlertDialogHeader>
-
                   <AlertDialogFooter className="flex justify-center gap-2">
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction

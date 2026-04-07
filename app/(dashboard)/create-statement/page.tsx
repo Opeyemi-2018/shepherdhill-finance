@@ -113,7 +113,7 @@ export default function CreateStatementPage() {
 
       toast.success(json.message || "Statement uploaded successfully!");
 
-      router.push("/statement");
+      router.push("/banking");
     } catch (err: any) {
       console.error("Statement upload error:", err);
       toast.error(err.message || "Could not upload statement");
@@ -147,7 +147,7 @@ export default function CreateStatementPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           
           {/* Client Selection */}
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <Label htmlFor="client">Select Client *</Label>
             {clientsLoading ? (
               <div className="flex items-center gap-2 text-gray-500">
@@ -176,7 +176,7 @@ export default function CreateStatementPage() {
                 </SelectContent>
               </Select>
             )}
-          </div>
+          </div> */}
 
           {/* Bank Selection - NEW */}
           <div className="space-y-2">
