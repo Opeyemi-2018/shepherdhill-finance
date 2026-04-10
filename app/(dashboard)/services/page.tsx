@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,24 +18,27 @@ import {
 } from "lucide-react";
 import HeaderContent from "@/components/HeaderContent";
 import { toast } from "sonner";
+import { useAuth } from "@/context/user";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-// ─── Types ──────────────────────────────────────────────────────────────────
 interface ServiceItem {
   id: number;
   name: string;
-  rate: number;
+  rate: number | string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-// ─── Dummy Data (5 items) ───────────────────────────────────────────────────
-const initialDummyItems: ServiceItem[] = [
-  { id: 1, name: "Armed Police Escort", rate: 45000 },
-  { id: 2, name: "Unarmed Security Guard", rate: 25000 },
-  { id: 3, name: "CCTV Installation", rate: 85000 },
-  { id: 4, name: "Access Control System", rate: 120000 },
-  { id: 5, name: "Perimeter Fencing", rate: 65000 },
-];
-
-// ─── Skeleton ────────────────────────────────────────────────────────────────
 const TableSkeleton = () => (
   <>
     {[1, 2, 3, 4, 5].map((i) => (
@@ -55,33 +59,90 @@ const TableSkeleton = () => (
 const PAGE_SIZE = 10;
 
 export default function ServiceItemsPage() {
-  const [items, setItems] = useState<ServiceItem[]>(initialDummyItems);
+  const { token } = useAuth();
+  const [items, setItems] = useState<ServiceItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Inline add row state
+  const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null); // Inline add row state
   const [showAddRow, setShowAddRow] = useState(false);
   const [newName, setNewName] = useState("");
   const [newRate, setNewRate] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [savingAdd, setSavingAdd] = useState(false);
 
   // Inline edit state
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editRate, setEditRate] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
-  // Delete state
+  // Delete state (still dummy)
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Helper function for authenticated fetch
+  const authFetch = async (url: string, options: RequestInit = {}) => {
+    if (!token) {
+      toast.error("You are not authenticated. Please login again.");
+      return null;
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`, // ← Token added here
+        ...options.headers,
+      },
+    });
+
+    return response;
+  };
+
+  // ── Fetch Services ───────────────────────────────────────────────────────
+  const fetchServices = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/services`);
+
+      if (!res) return;
+
+      if (!res.ok) throw new Error("Failed to fetch services");
+
+      const data = await res.json();
+
+      if (data.status && Array.isArray(data.data)) {
+        const formatted = data.data.map((item: any) => ({
+          ...item,
+          rate: parseFloat(item.rate || "0"),
+        }));
+        setItems(formatted);
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load services. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, [token]); // Re-fetch when token changes
 
   // ── Filtered & Paginated Data ─────────────────────────────────────────────
   const filtered = items.filter((i) =>
-    i.name.toLowerCase().includes(searchQuery.toLowerCase())
+    i.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice(
     (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
+    currentPage * PAGE_SIZE,
   );
 
   const goToPage = (p: number) => {
@@ -91,23 +152,41 @@ export default function ServiceItemsPage() {
 
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
 
-  // ── Add New Item ─────────────────────────────────────────────────────────
-  const handleAdd = () => {
+  // ── Add New Service ──────────────────────────────────────────────────────
+  const handleAdd = async () => {
     if (!newName.trim()) return toast.error("Service name is required");
     if (!newRate || isNaN(Number(newRate)) || Number(newRate) < 0)
       return toast.error("Enter a valid rate");
 
-    const newItem: ServiceItem = {
-      id: Date.now(),
-      name: newName.trim(),
-      rate: Number(newRate),
-    };
+    setSavingAdd(true);
 
-    setItems((prev) => [newItem, ...prev]);
-    toast.success("Service item added successfully");
-    setNewName("");
-    setNewRate("");
-    setShowAddRow(false);
+    try {
+      const res = await authFetch(`${API_URL}/service/create`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newName.trim(),
+          rate: newRate,
+        }),
+      });
+
+      if (!res) return;
+
+      const data = await res.json();
+
+      if (data.status) {
+        toast.success("Service created successfully");
+        setNewName("");
+        setNewRate("");
+        setShowAddRow(false);
+        await fetchServices();
+      } else {
+        toast.error(data.message || "Failed to create service");
+      }
+    } catch (error) {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setSavingAdd(false);
+    }
   };
 
   // ── Start Edit ───────────────────────────────────────────────────────────
@@ -118,31 +197,65 @@ export default function ServiceItemsPage() {
   };
 
   // ── Save Edit ────────────────────────────────────────────────────────────
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editName.trim()) return toast.error("Service name is required");
     if (!editRate || isNaN(Number(editRate)) || Number(editRate) < 0)
       return toast.error("Enter a valid rate");
+    if (!editId) return;
 
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === editId
-          ? { ...item, name: editName.trim(), rate: Number(editRate) }
-          : item
-      )
-    );
+    setSavingEdit(true);
 
-    toast.success("Service item updated successfully");
-    setEditId(null);
+    try {
+      const res = await authFetch(`${API_URL}/service/edit/${editId}`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: editName.trim(),
+          rate: editRate,
+        }),
+      });
+
+      if (!res) return;
+
+      const data = await res.json();
+
+      if (data.status) {
+        toast.success("Service updated successfully");
+        setEditId(null);
+        await fetchServices();
+      } else {
+        toast.error(data.message || "Failed to update service");
+      }
+    } catch (error) {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
-  // ── Delete Item ──────────────────────────────────────────────────────────
-  const handleDelete = (id: number) => {
+  // ── Delete Service ───────────────────────────────────────────────────────
+  const handleDelete = async (id: number) => {
     setDeletingId(id);
-    setTimeout(() => {
-      setItems((prev) => prev.filter((i) => i.id !== id));
-      toast.success("Service item deleted successfully");
+
+    try {
+      const res = await authFetch(`${API_URL}/service/delete/${id}`, {
+        method: "POST",
+      });
+
+      if (!res) return;
+
+      const data = await res.json();
+
+      if (data.status) {
+        toast.success("Service deleted successfully");
+        await fetchServices();
+      } else {
+        toast.error(data.message || "Failed to delete service");
+      }
+    } catch (error) {
+      toast.error("Network error. Please try again.");
+    } finally {
       setDeletingId(null);
-    }, 300);
+    }
   };
 
   // ── Download CSV ─────────────────────────────────────────────────────────
@@ -157,7 +270,7 @@ export default function ServiceItemsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "service-items.csv";
+    a.download = `service-items-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Downloaded successfully");
@@ -180,7 +293,6 @@ export default function ServiceItemsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Search */}
             <div className="relative w-full flex items-center sm:w-72">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
@@ -194,7 +306,6 @@ export default function ServiceItemsPage() {
               />
             </div>
 
-            {/* Download */}
             <Button
               variant="outline"
               className="gap-1.5 text-[13px]"
@@ -204,7 +315,6 @@ export default function ServiceItemsPage() {
               Download
             </Button>
 
-            {/* Add Button */}
             <Button
               className="bg-[#FAB435]/30 text-[#E89500] hover:bg-[#FAB435]/50 gap-1.5 text-[13px]"
               onClick={() => {
@@ -248,7 +358,7 @@ export default function ServiceItemsPage() {
                     <Input
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      placeholder="e.g. Armed Police"
+                      placeholder="e.g. Armed Police Escort"
                       className="h-9 text-[13px] bg-white dark:bg-gray-800 border-[#E5E7EB]"
                       onKeyDown={(e) => e.key === "Enter" && handleAdd()}
                     />
@@ -259,7 +369,7 @@ export default function ServiceItemsPage() {
                       onChange={(e) => setNewRate(e.target.value)}
                       type="number"
                       min={0}
-                      placeholder="2000"
+                      placeholder="45000"
                       className="h-9 text-[13px] bg-white dark:bg-gray-800 border-[#E5E7EB] w-36"
                       onKeyDown={(e) => e.key === "Enter" && handleAdd()}
                     />
@@ -268,10 +378,10 @@ export default function ServiceItemsPage() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleAdd}
-                        disabled={saving}
+                        disabled={savingAdd}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#FAB435] text-white text-[12px] font-medium hover:bg-[#DC9E2E] disabled:opacity-60 transition-colors"
                       >
-                        {saving ? (
+                        {savingAdd ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
                           <Check className="h-3.5 w-3.5" />
@@ -293,17 +403,24 @@ export default function ServiceItemsPage() {
                 </tr>
               )}
 
-              {/* Data Rows */}
-              {paginated.length === 0 ? (
+              {loading && <TableSkeleton />}
+
+              {!loading && paginated.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-[#9E9A9A] font-dm-sans text-[13px]">
-                    {searchQuery ? "No service items match your search" : "No service items yet. Click 'Add Item' to get started."}
+                  <td
+                    colSpan={4}
+                    className="py-12 text-center text-[#9E9A9A] font-dm-sans text-[13px]"
+                  >
+                    {searchQuery
+                      ? "No service items match your search"
+                      : "No service items yet. Click 'Add Item' to get started."}
                   </td>
                 </tr>
-              ) : (
+              )}
+
+              {!loading &&
                 paginated.map((item, idx) =>
                   editId === item.id ? (
-                    /* Inline Edit Row */
                     <tr key={item.id} className="bg-[#FAB435]/5">
                       <td className="py-3 pl-3 text-[13px] text-gray-400">
                         {(currentPage - 1) * PAGE_SIZE + idx + 1}
@@ -330,9 +447,14 @@ export default function ServiceItemsPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={handleEdit}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#FAB435] text-white text-[12px] font-medium hover:bg-[#DC9E2E]"
+                            disabled={savingEdit}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#FAB435] text-white text-[12px] font-medium hover:bg-[#DC9E2E] disabled:opacity-60"
                           >
-                            <Check className="h-3.5 w-3.5" />
+                            {savingEdit ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
                             Update
                           </button>
                           <button
@@ -345,8 +467,10 @@ export default function ServiceItemsPage() {
                       </td>
                     </tr>
                   ) : (
-                    /* Normal Row */
-                    <tr key={item.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
+                    <tr
+                      key={item.id}
+                      className="transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+                    >
                       <td className="py-5 pl-4 text-[13px] sm:text-[15px] text-[#2F2F2F] dark:text-[#979797]">
                         {(currentPage - 1) * PAGE_SIZE + idx + 1}
                       </td>
@@ -354,7 +478,7 @@ export default function ServiceItemsPage() {
                         {item.name}
                       </td>
                       <td className="py-5 text-[13px] sm:text-[15px] text-[#2F2F2F] dark:text-[#979797]">
-                        ₦{item.rate.toLocaleString()}
+                        ₦{Number(item.rate).toLocaleString()}
                       </td>
                       <td className="py-5">
                         <div className="flex items-center gap-2">
@@ -365,66 +489,107 @@ export default function ServiceItemsPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            disabled={deletingId === item.id}
-                            className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
-                            title="Delete"
-                          >
-                            {deletingId === item.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <button
+                                onClick={() => setDeleteTarget(item)}
+                                className="p-1.5 rounded-md text-gray-400 hover:text-red-500"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </DialogTrigger>
+
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Delete Service</DialogTitle>
+                                <DialogDescription>
+                                  Are you sure you want to delete{" "}
+                                  <span className="font-medium text-black dark:text-white">
+                                    {deleteTarget?.name}
+                                  </span>
+                                  ? This action cannot be undone.
+                                </DialogDescription>
+                              </DialogHeader>
+
+                              <DialogFooter>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setDeleteTarget(null)}
+                                >
+                                  Cancel
+                                </Button>
+
+                                <Button
+                                  className="bg-red-500 hover:bg-red-600 text-white"
+                                  disabled={deletingId === deleteTarget?.id}
+                                  onClick={async () => {
+                                    if (!deleteTarget) return;
+
+                                    await handleDelete(deleteTarget.id);
+
+                                    setDeleteTarget(null);
+                                  }}
+                                >
+                                  {deletingId === deleteTarget?.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    "Delete"
+                                  )}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </td>
                     </tr>
-                  )
-                )
-              )}
+                  ),
+                )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div className="flex items-center justify-center sm:justify-end gap-2 mt-8">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={currentPage === 1}
-            onClick={() => goToPage(currentPage - 1)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+        {!loading && (
+          <div className="flex items-center justify-center sm:justify-end gap-2 mt-8">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={currentPage === 1}
+              onClick={() => goToPage(currentPage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
 
-          <div className="flex items-center gap-1">
-            {pageNumbers.map((p) => (
-              <Button
-                key={p}
-                variant="outline"
-                size="sm"
-                className={`h-8 w-8 text-[13px] ${
-                  p === currentPage ? "bg-[#FAB435]/30 text-[#FAB435] border-none" : ""
-                }`}
-                onClick={() => goToPage(p)}
-              >
-                {p}
-              </Button>
-            ))}
+            <div className="flex items-center gap-1">
+              {pageNumbers.map((p) => (
+                <Button
+                  key={p}
+                  variant="outline"
+                  size="sm"
+                  className={`h-8 w-8 text-[13px] ${
+                    p === currentPage
+                      ? "bg-[#FAB435]/30 text-[#FAB435] border-none"
+                      : ""
+                  }`}
+                  onClick={() => goToPage(p)}
+                >
+                  {p}
+                </Button>
+              ))}
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={currentPage === totalPages}
+              onClick={() => goToPage(currentPage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
-
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={currentPage === totalPages}
-            onClick={() => goToPage(currentPage + 1)}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   );

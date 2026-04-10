@@ -26,10 +26,15 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import HeaderContent from "@/components/HeaderContent";
 import { useClients } from "@/hooks/useClient";
+import { useAuth } from "@/context/user";
+import { useServices } from "@/hooks/useService";
+
+import { Switch } from "@/components/ui/switch";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 interface LineItem {
-  service: string;
+  service_id: string;
+  service_name: string;
   quantity: number;
   rate: number;
 }
@@ -37,13 +42,14 @@ interface LineItem {
 interface FormData {
   client_id: string;
   invoice_date: Date;
-  due_date: Date;
+  due_date: string;
   items: LineItem[];
   discount: number;
   tax: number;
   terms: string;
   payment_link: string;
-  signature: string;
+  type: "draft" | null;
+  status: "paid" | "unpaid"; // Add this
 }
 
 interface FormErrors {
@@ -85,7 +91,13 @@ function validateUrl(url: string): boolean {
 // ─── Component ──────────────────────────────────────────────────────────────
 export default function CreateInvoice() {
   const router = useRouter();
-  const { clients, isLoading: clientsLoading, error: clientsError } = useClients();
+  const { token } = useAuth();
+  const {
+    clients,
+    isLoading: clientsLoading,
+    error: clientsError,
+  } = useClients();
+  const { services, isLoading: servicesLoading } = useServices();
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -95,16 +107,35 @@ export default function CreateInvoice() {
   const [formData, setFormData] = useState<FormData>({
     client_id: "",
     invoice_date: new Date(),
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    items: [{ service: "", quantity: 1, rate: 0 }],
+    due_date: format(
+      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      "yyyy-MM-dd",
+    ),
+    items: [{ service_id: "", service_name: "", quantity: 1, rate: 0 }],
     discount: 0,
     tax: 0,
     terms: "",
     payment_link: "",
-    signature: "",
+    type: null,
+    status: "unpaid", // Add this
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
+
+  // Handle service selection
+  const handleServiceSelect = (index: number, serviceId: string) => {
+    const selectedService = services.find((s) => s.id.toString() === serviceId);
+    if (selectedService) {
+      const updatedItems = [...formData.items];
+      updatedItems[index] = {
+        service_id: serviceId,
+        service_name: selectedService.name,
+        quantity: 1,
+        rate: parseFloat(selectedService.rate.toString()),
+      };
+      updateFormData("items", updatedItems);
+    }
+  };
 
   // Validate form
   const validateForm = (): boolean => {
@@ -127,13 +158,13 @@ export default function CreateInvoice() {
     } else {
       let hasEmptyService = false;
       for (let i = 0; i < formData.items.length; i++) {
-        if (!formData.items[i].service) {
+        if (!formData.items[i].service_id) {
           hasEmptyService = true;
           break;
         }
       }
       if (hasEmptyService) {
-        newErrors.items = "All service names are required";
+        newErrors.items = "All services are required";
       }
     }
 
@@ -155,23 +186,25 @@ export default function CreateInvoice() {
 
   // Update form data
   const updateFormData = (field: keyof FormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field if it exists
+    setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field as keyof FormErrors]) {
-      setErrors(prev => ({ ...prev, [field]: undefined }));
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   };
 
-  // Update line item
-  const updateLineItem = (index: number, field: keyof LineItem, value: any) => {
+  // Update line item quantity
+  const updateLineItemQuantity = (index: number, quantity: number) => {
     const updatedItems = [...formData.items];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    updatedItems[index].quantity = quantity;
     updateFormData("items", updatedItems);
   };
 
   // Add line item
   const addLineItem = () => {
-    updateFormData("items", [...formData.items, { service: "", quantity: 1, rate: 0 }]);
+    updateFormData("items", [
+      ...formData.items,
+      { service_id: "", service_name: "", quantity: 1, rate: 0 },
+    ]);
   };
 
   // Remove line item
@@ -184,7 +217,7 @@ export default function CreateInvoice() {
 
   // Calculate totals
   const lineSubtotals = formData.items.map(
-    (item) => (Number(item?.quantity) || 0) * (Number(item?.rate) || 0)
+    (item) => (Number(item?.quantity) || 0) * (Number(item?.rate) || 0),
   );
   const subtotal = lineSubtotals.reduce((a, b) => a + b, 0);
   const discountAmount = formData.discount || 0;
@@ -197,18 +230,96 @@ export default function CreateInvoice() {
       return;
     }
 
+    if (!token) {
+      toast.error("Authentication required");
+      return;
+    }
+
     saveAsDraft ? setIsSavingDraft(true) : setIsCreating(true);
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Prepare items array - send only service ID and quantity
+      const items = formData.items.map((item) => ({
+        service: item.service_id,
+        quantity: item.quantity,
+      }));
 
-      toast.success(
-        saveAsDraft ? "Invoice saved as draft!" : "Invoice created successfully!"
+      // Build payload according to API requirements
+      const payload: any = {
+        client_id: parseInt(formData.client_id),
+        invoice_date: format(formData.invoice_date, "yyyy-MM-dd"),
+        due_date: formData.due_date,
+        items: items,
+        status: formData.status,
+        draft: saveAsDraft,
+      };
+
+      payload.draft = saveAsDraft;
+
+      // Add optional fields only if they have values
+      if (formData.terms) {
+        payload.terms = formData.terms;
+      }
+
+      if (formData.payment_link) {
+        payload.payment_link = formData.payment_link;
+      }
+
+      // Add tax and discount as strings (API expects strings)
+      if (
+        formData.tax !== undefined &&
+        formData.tax !== null &&
+        formData.tax !== 0
+      ) {
+        payload.tax = formData.tax.toString();
+      } else {
+        payload.tax = "";
+      }
+
+      if (
+        formData.discount !== undefined &&
+        formData.discount !== null &&
+        formData.discount !== 0
+      ) {
+        payload.discount = formData.discount.toString();
+      } else {
+        payload.discount = "";
+      }
+
+      console.log("Sending payload:", payload);
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/invoice/create`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        },
       );
 
-      router.push("/invoices");
+      const data = await response.json();
+
+      if (data.status) {
+        toast.success(
+          saveAsDraft
+            ? "Invoice saved as draft!"
+            : "Invoice created successfully!",
+        );
+        router.push("/invoices");
+      } else {
+        // Display detailed validation errors
+        if (data.errors) {
+          const errorMessages = Object.values(data.errors).flat().join(", ");
+          toast.error(errorMessages || "Failed to create invoice");
+        } else {
+          toast.error(data.message || "Failed to create invoice");
+        }
+      }
     } catch (error: any) {
+      console.error("Invoice creation error:", error);
       toast.error(error.message || "Failed to submit invoice");
     } finally {
       saveAsDraft ? setIsSavingDraft(false) : setIsCreating(false);
@@ -242,13 +353,17 @@ export default function CreateInvoice() {
           {/* Client + Dates */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Client <span className="text-red-500">*</span></Label>
+              <Label>
+                Client <span className="text-red-500">*</span>
+              </Label>
               {clientsLoading ? (
                 <div className="h-12 flex items-center gap-2 text-[13px] text-gray-400">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                 </div>
               ) : clientsError ? (
-                <div className="h-12 flex items-center text-red-500 text-[13px]">{clientsError}</div>
+                <div className="h-12 flex items-center text-red-500 text-[13px]">
+                  {clientsError}
+                </div>
               ) : (
                 <div>
                   <Select
@@ -256,22 +371,29 @@ export default function CreateInvoice() {
                     onValueChange={(val) => updateFormData("client_id", val)}
                     disabled={isSubmitting}
                   >
-                    <SelectTrigger className={cn(
-                      "bg-[#F9FAFB] border-[#E5E7EB] h-12",
-                      errors.client_id && "border-red-500"
-                    )}>
+                    <SelectTrigger
+                      className={cn(
+                        "bg-[#F9FAFB] border-[#E5E7EB] h-12",
+                        errors.client_id && "border-red-500",
+                      )}
+                    >
                       <SelectValue placeholder="Select Client" />
                     </SelectTrigger>
                     <SelectContent>
                       {clients.map((client: any) => (
-                        <SelectItem key={client.id} value={client.id.toString()}>
+                        <SelectItem
+                          key={client.id}
+                          value={client.id.toString()}
+                        >
                           {client.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {errors.client_id && (
-                    <p className="text-red-500 text-xs mt-1">{errors.client_id}</p>
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.client_id}
+                    </p>
                   )}
                 </div>
               )}
@@ -279,65 +401,60 @@ export default function CreateInvoice() {
 
             {/* Invoice Date */}
             <div className="space-y-2">
-              <Label>Invoice Date <span className="text-red-500">*</span></Label>
+              <Label>
+                Invoice Date <span className="text-red-500">*</span>
+              </Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
                       "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
-                      errors.invoice_date && "border-red-500"
+                      errors.invoice_date && "border-red-500",
                     )}
                     disabled={isSubmitting}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.invoice_date 
-                      ? format(formData.invoice_date, "dd-MM-yy") 
-                      : <span>DD-MM-YY</span>}
+                    {formData.invoice_date ? (
+                      format(formData.invoice_date, "dd-MM-yyyy")
+                    ) : (
+                      <span>DD-MM-YYYY</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="single"
                     selected={formData.invoice_date}
-                    onSelect={(date) => date && updateFormData("invoice_date", date)}
+                    onSelect={(date) =>
+                      date && updateFormData("invoice_date", date)
+                    }
                     initialFocus
                   />
                 </PopoverContent>
               </Popover>
               {errors.invoice_date && (
-                <p className="text-red-500 text-xs mt-1">{errors.invoice_date}</p>
+                <p className="text-red-500 text-xs mt-1">
+                  {errors.invoice_date}
+                </p>
               )}
             </div>
 
             {/* Due Date */}
             <div className="space-y-2">
-              <Label>Due Date <span className="text-red-500">*</span></Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full h-12 bg-[#F9FAFB] border-[#E5E7EB] justify-start text-left font-normal",
-                      errors.due_date && "border-red-500"
-                    )}
-                    disabled={isSubmitting}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.due_date 
-                      ? format(formData.due_date, "dd-MM-yy") 
-                      : <span>DD-MM-YY</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={formData.due_date}
-                    onSelect={(date) => date && updateFormData("due_date", date)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Label>
+                Due Date <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={formData.due_date}
+                onChange={(e) => updateFormData("due_date", e.target.value)}
+                className={cn(
+                  "h-12 bg-[#F9FAFB] border-[#E5E7EB]",
+                  errors.due_date && "border-red-500",
+                )}
+                disabled={isSubmitting}
+              />
               {errors.due_date && (
                 <p className="text-red-500 text-xs mt-1">{errors.due_date}</p>
               )}
@@ -362,11 +479,13 @@ export default function CreateInvoice() {
               </Button>
             </div>
 
-            <div className={cn(
-              "rounded-lg border border-[#E5E7EB] overflow-hidden",
-              errors.items && "border-red-500"
-            )}>
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] bg-gray-50 dark:bg-gray-800 px-4 py-2 text-[12px] font-semibold text-gray-500 dark:text-[#979797] uppercase tracking-wide">
+            <div
+              className={cn(
+                "rounded-lg border border-[#E5E7EB] overflow-hidden",
+                errors.items && "border-red-500",
+              )}
+            >
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto]  px-4 py-2 text-[12px] font-semibold text-gray-500 dark:text-[#979797] uppercase tracking-wide">
                 <span>Service</span>
                 <span>Qty</span>
                 <span>Rate (₦)</span>
@@ -379,19 +498,33 @@ export default function CreateInvoice() {
                   key={index}
                   className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-center gap-2 px-4 py-3 border-t border-[#E5E7EB] first:border-t-0"
                 >
-                  <Input
-                    value={item.service}
-                    onChange={(e) => updateLineItem(index, "service", e.target.value)}
-                    placeholder="e.g. Man Guarding"
-                    className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
-                    disabled={isSubmitting}
-                  />
+                  <Select
+                    value={item.service_id}
+                    onValueChange={(val) => handleServiceSelect(index, val)}
+                    disabled={isSubmitting || servicesLoading}
+                  >
+                    <SelectTrigger className="h-9 text-[13px] w-full bg-[#F9FAFB] border-[#E5E7EB]">
+                      <SelectValue placeholder="Select Service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {services.map((service) => (
+                        <SelectItem
+                          key={service.id}
+                          value={service.id.toString()}
+                        >
+                          {service.name} - {formatCurrency(service.rate)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
                   <Input
                     type="number"
                     min={1}
                     value={item.quantity}
-                    onChange={(e) => updateLineItem(index, "quantity", Number(e.target.value) || 0)}
+                    onChange={(e) =>
+                      updateLineItemQuantity(index, Number(e.target.value) || 0)
+                    }
                     className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
                     disabled={isSubmitting}
                   />
@@ -401,12 +534,12 @@ export default function CreateInvoice() {
                     min={0}
                     step="0.01"
                     value={item.rate}
-                    onChange={(e) => updateLineItem(index, "rate", Number(e.target.value) || 0)}
-                    className="h-9 text-[13px] bg-[#F9FAFB] border-[#E5E7EB]"
-                    disabled={isSubmitting}
+                    readOnly
+                    className="h-9 text-[13px] bg-gray-100 border-[#E5E7EB] cursor-not-allowed"
+                    disabled
                   />
 
-                  <div className="h-9 flex items-center px-3 rounded-md bg-gray-50 dark:bg-gray-800 border border-[#E5E7EB] text-[13px] font-medium">
+                  <div className="h-9 flex items-center px-3 rounded-md  border border-[#E5E7EB] text-[13px] font-medium">
                     {formatCurrency(lineSubtotals[index] || 0)}
                   </div>
 
@@ -428,30 +561,40 @@ export default function CreateInvoice() {
             {/* Totals */}
             <div className="mt-3 flex justify-end">
               <div className="w-full max-w-xs space-y-2 text-[13px]">
-                <div className="flex justify-between text-gray-500">
+                <div className="flex justify-between  text-gray-500 dark:text-[#979797]">
                   <span>Subtotal</span>
-                  <span className="font-medium">{formatCurrency(subtotal)}</span>
+                  <span className="font-medium">
+                    {formatCurrency(subtotal)}
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center gap-3">
-                  <span className="text-gray-500">Discount (₦)</span>
+                  <span className=" text-gray-500 dark:text-[#979797]">
+                    Discount (₦) (optional)
+                  </span>
                   <Input
                     type="number"
                     min={0}
                     value={formData.discount}
-                    onChange={(e) => updateFormData("discount", Number(e.target.value) || 0)}
+                    onChange={(e) =>
+                      updateFormData("discount", Number(e.target.value) || 0)
+                    }
                     className="w-32 h-8 text-right"
                     disabled={isSubmitting}
                   />
                 </div>
 
                 <div className="flex justify-between items-center gap-3">
-                  <span className="text-gray-500">Tax (₦)</span>
+                  <span className=" text-gray-500 dark:text-[#979797]">
+                    Tax (₦) (optional)
+                  </span>
                   <Input
                     type="number"
                     min={0}
                     value={formData.tax}
-                    onChange={(e) => updateFormData("tax", Number(e.target.value) || 0)}
+                    onChange={(e) =>
+                      updateFormData("tax", Number(e.target.value) || 0)
+                    }
                     className="w-32 h-8 text-right"
                     disabled={isSubmitting}
                   />
@@ -459,9 +602,42 @@ export default function CreateInvoice() {
 
                 <div className="border-t pt-2 flex justify-between font-bold text-[14px]">
                   <span>Total</span>
-                  <span className="text-[#FAB435]">{formatCurrency(total)}</span>
+                  <span className="text-[#FAB435]">
+                    {formatCurrency(total)}
+                  </span>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-0.5">
+              <Label className="text-[14px] font-semibold">
+                Invoice Status
+              </Label>
+              <p className="text-[12px] text-gray-500">
+                Mark this invoice as paid or unpaid
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span
+                className={`text-[13px] ${formData.status === "unpaid" ? "text-red-500 font-medium" : "text-gray-400"}`}
+              >
+                Unpaid
+              </span>
+              <Switch
+                checked={formData.status === "paid"}
+                onCheckedChange={(checked) =>
+                  updateFormData("status", checked ? "paid" : "unpaid")
+                }
+                disabled={isSubmitting}
+                className="data-[state=checked]:bg-green-500"
+              />
+              <span
+                className={`text-[13px] ${formData.status === "paid" ? "text-green-500 font-medium" : "text-gray-400"}`}
+              >
+                Paid
+              </span>
             </div>
           </div>
 

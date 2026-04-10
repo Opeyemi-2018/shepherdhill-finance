@@ -101,20 +101,24 @@ STATEMENT DETAILS
 =================
 
 Statement ID     : STM-${statement.id}
-Client Name      : ${statement.client.name}
-Client Email     : ${statement.client.email}
-Client Address   : ${statement.client.address}
+
 Status           : ${statement.status.toUpperCase()}
-Created At       : ${new Date(statement.created_at).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })}
-Updated At       : ${new Date(statement.updated_at).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })}
+Created At       : ${new Date(statement.created_at).toLocaleDateString(
+      "en-GB",
+      {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      },
+    )}
+Updated At       : ${new Date(statement.updated_at).toLocaleDateString(
+      "en-GB",
+      {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      },
+    )}
 
 Description:
 ${statement.description || "No description provided."}
@@ -127,7 +131,6 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Statement_STM-${statement.id}_${statement.client.name.replace(/\s+/g, "_")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -176,18 +179,6 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
           >
             <IoChevronBackOutline className="h-5 w-5" />
           </Button>
-
-          <div className="flex items-center gap-2">
-            <FaUserLarge className="bg-primary-foreground dark:bg-transparent text-[#FAB435] rounded-full p-2 w-12 h-12" />
-            <div>
-              <h1 className="md:text-[20px] font-medium">{statement.client.name}</h1>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-[14px] text-gray-500">
-                  STM-{statement.id} • {statement.client.email}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="flex gap-2">
@@ -209,16 +200,6 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Client Name</p>
-            <p className="font-medium text-[14px]">{statement.client.name}</p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Client Email</p>
-            <p className="font-medium text-[14px]">{statement.client.email}</p>
-          </div>
-
-          <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Statement ID</p>
             <p className="font-medium text-[14px]">STM-{statement.id}</p>
           </div>
@@ -236,13 +217,19 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
 
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Description</p>
-            <p className="font-medium text-[14px]">{statement.description || "—"}</p>
+            <p className="font-medium text-[14px]">
+              {statement.description || "—"}
+            </p>
           </div>
 
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Status</p>
-            <p className={`font-medium text-[14px] ${getStatusColor(statement.status)}`}>
-              • {statement.status.charAt(0).toUpperCase() + statement.status.slice(1)}
+            <p
+              className={`font-medium text-[14px] ${getStatusColor(statement.status)}`}
+            >
+              •{" "}
+              {statement.status.charAt(0).toUpperCase() +
+                statement.status.slice(1)}
             </p>
           </div>
 

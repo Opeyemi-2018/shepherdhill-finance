@@ -19,9 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Client, useClients } from "@/hooks/useClient";
 
-// Dummy Bank List (you can later fetch from API if needed)
+// Dummy Bank List
 const BANKS = [
   "Access Bank",
   "First Bank Nigeria",
@@ -42,9 +41,7 @@ const BANKS = [
 export default function CreateStatementPage() {
   const router = useRouter();
   const { token } = useAuth();
-  const { clients, isLoading: clientsLoading, error: clientsError } = useClients();
 
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedBank, setSelectedBank] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
@@ -64,11 +61,6 @@ export default function CreateStatementPage() {
       return;
     }
 
-    if (!selectedClientId) {
-      toast.error("Please select a client");
-      return;
-    }
-
     if (!selectedBank) {
       toast.error("Please select a bank");
       return;
@@ -83,8 +75,7 @@ export default function CreateStatementPage() {
 
     try {
       const formData = new FormData();
-      formData.append("client_id", selectedClientId);
-      formData.append("bank", selectedBank);           // ← Added Bank
+      formData.append("bank_name", selectedBank);  // Changed from "bank" to "bank_name"
       formData.append("file", file);
       if (description.trim()) {
         formData.append("description", description.trim());
@@ -112,7 +103,6 @@ export default function CreateStatementPage() {
       }
 
       toast.success(json.message || "Statement uploaded successfully!");
-
       router.push("/banking");
     } catch (err: any) {
       console.error("Statement upload error:", err);
@@ -145,40 +135,7 @@ export default function CreateStatementPage() {
 
       <div className="bg-primary-foreground shadow-lg rounded-lg p-6 md:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Client Selection */}
-          {/* <div className="space-y-2">
-            <Label htmlFor="client">Select Client *</Label>
-            {clientsLoading ? (
-              <div className="flex items-center gap-2 text-gray-500">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                Loading clients...
-              </div>
-            ) : clientsError ? (
-              <p className="text-red-600">{clientsError}</p>
-            ) : clients.length === 0 ? (
-              <p className="text-gray-500">No clients available</p>
-            ) : (
-              <Select
-                value={selectedClientId}
-                onValueChange={setSelectedClientId}
-                required
-              >
-                <SelectTrigger className="w-full h-12">
-                  <SelectValue placeholder="Select a client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client: Client) => (
-                    <SelectItem key={client.id} value={client.id.toString()}>
-                      {client.name} {client.email ? `(${client.email})` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div> */}
-
-          {/* Bank Selection - NEW */}
+          {/* Bank Selection */}
           <div className="space-y-2">
             <Label htmlFor="bank">Select Bank *</Label>
             <Select
@@ -231,7 +188,7 @@ export default function CreateStatementPage() {
           <div className="flex justify-end pt-4">
             <Button
               type="submit"
-              disabled={uploading || clientsLoading}
+              disabled={uploading}
               className="bg-[#FAB435]/30 text-[#E89500] px-8 py-6"
             >
               {uploading ? (

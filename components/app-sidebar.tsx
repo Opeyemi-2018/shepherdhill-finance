@@ -60,6 +60,7 @@ interface MenuItem {
 
 const items: MenuItem[] = [
   { title: "Dashboard", url: "/overview", icon: LayoutDashboard },
+  { title: "Invoice", url: "/invoices", icon: FileText },
   { title: "Service", url: "/services", icon: Briefcase },
   { title: "Service Requests", url: "/service-request", icon: Briefcase },
   { title: "Banking", url: "/banking", icon: NotepadText },
@@ -69,10 +70,10 @@ const items: MenuItem[] = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
-const invoiceSubItems = [
-  { title: "Invoice", url: "/invoices", icon: FileText },
-  { title: "Set Rate", url: "/set-rate", icon: SlidersHorizontal },
-];
+// const invoiceSubItems = [
+//   { title: "Invoice", url: "/invoices", icon: FileText },
+//   { title: "Set Rate", url: "/set-rate", icon: SlidersHorizontal },
+// ];
 
 export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
   const pathname = usePathname();
@@ -123,7 +124,10 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
               ))}
 
               {/* ── Invoices collapsible ── */}
-              <Collapsible defaultOpen={isInvoiceActive} className="group/collapsible">
+              {/* <Collapsible
+                defaultOpen={isInvoiceActive}
+                className="group/collapsible"
+              >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
@@ -161,7 +165,7 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
-              </Collapsible>
+              </Collapsible> */}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -179,7 +183,9 @@ export function AppSidebar({ onLinkClick }: { onLinkClick?: () => void }) {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogTitle>
+                      Are you absolutely sure?
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
                       This action will log you out of the system
                     </AlertDialogDescription>

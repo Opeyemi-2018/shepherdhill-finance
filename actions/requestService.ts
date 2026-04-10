@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 export async function getServiceRequests(token: string) {
   try {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/admin/service/requests`,
+      `${process.env.NEXT_PUBLIC_API_URL}/service/requests`,
       {
         method: "GET",
         headers: {
@@ -46,7 +46,7 @@ export async function getServiceDetails(
 ) {
   try {
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/admin/service/details/${serviceId}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/service/details/${serviceId}`,
       {
         method: "GET",
         headers: {
@@ -200,6 +200,57 @@ export async function deployStaffToService(
     return {
       success: false,
       message: "Server error during staff deployment",
+    };
+  }
+}
+
+export async function updateServiceStatus(
+  token: string,
+  payload: { service_id: string; status: string }
+) {
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/service/status`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+      },
+    );
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        message: errData.message || "Failed to update service status",
+        error: errData,
+      };
+    }
+
+    const json = await res.json();
+
+    if (!json.status) {
+      return {
+        success: false,
+        message: json.message || "Status update failed",
+      };
+    }
+
+    return {
+      success: true,
+      message: json.message || "Service status updated successfully",
+      data: json.data ?? null,
+    };
+  } catch (error) {
+    console.error("Update service status error:", error);
+    return {
+      success: false,
+      message: "Server error while updating service status",
     };
   }
 }

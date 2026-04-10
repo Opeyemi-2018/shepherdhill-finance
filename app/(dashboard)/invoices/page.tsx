@@ -35,34 +35,39 @@ export default function InvoiceTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"All Invoices" | "Paid" | "Unpaid" | "Draft">("All Invoices");
 
-  const getInvoiceStatusBadge = (status: string) => {
+  const getInvoiceStatusBadge = (status: string, draft?: string) => {
     let textClass = "text-gray-700 dark:text-gray-400";
     let dotClass = "bg-gray-500";
+    let displayText = "";
 
-    switch (status?.toLowerCase()) {
-      case "paid":
-        textClass = "text-green-700 dark:text-green-400";
-        dotClass = "bg-green-500";
-        break;
-      case "partial":
-      case "sent":
-        textClass = "text-blue-700 dark:text-blue-400";
-        dotClass = "bg-blue-500";
-        break;
-      case "draft":
-        textClass = "text-gray-700 dark:text-gray-400";
-        dotClass = "bg-gray-500";
-        break;
-      case "overdue":
-        textClass = "text-red-700 dark:text-red-400";
-        dotClass = "bg-red-500";
-        break;
+    // Check if it's a draft (draft === "1" OR status is empty)
+    const isDraft = draft === "1" || status === "";
+
+    if (isDraft) {
+      displayText = "Draft";
+      textClass = "text-gray-700 dark:text-gray-400";
+      dotClass = "bg-gray-500";
+    } else {
+      switch (status?.toLowerCase()) {
+        case "paid":
+          displayText = "Paid";
+          textClass = "text-green-700 dark:text-green-400";
+          dotClass = "bg-green-500";
+          break;
+        case "unpaid":
+          displayText = "Unpaid";
+          textClass = "text-red-700 dark:text-red-400";
+          dotClass = "bg-red-500";
+          break;
+        default:
+          displayText = status?.charAt(0).toUpperCase() + status?.slice(1) || "Unknown";
+      }
     }
 
     return (
       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${textClass}`}>
         <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`}></span>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+        {displayText}
       </span>
     );
   };
@@ -74,14 +79,22 @@ export default function InvoiceTable() {
       inv.description?.toLowerCase().includes(searchLower) ||
       `INV-${inv.id}`.toLowerCase().includes(searchLower);
 
-    const tabLower = activeTab.toLowerCase();
+    const isDraft = inv.draft === "1" || inv.status === "";
 
-    const matchesTab =
-      activeTab === "All Invoices" ? true :
-      tabLower === "paid" ? inv.status?.toLowerCase() === "paid" :
-      tabLower === "unpaid" ? inv.status?.toLowerCase() === "unpaid" :
-      tabLower === "draft" ? inv.status?.toLowerCase() === "draft" :
-      true;
+    let matchesTab = true;
+    switch (activeTab) {
+      case "Paid":
+        matchesTab = inv.status?.toLowerCase() === "paid";
+        break;
+      case "Unpaid":
+        matchesTab = inv.status?.toLowerCase() === "unpaid";
+        break;
+      case "Draft":
+        matchesTab = isDraft;
+        break;
+      default:
+        matchesTab = true;
+    }
 
     return matchesSearch && matchesTab;
   });
@@ -163,8 +176,8 @@ export default function InvoiceTable() {
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-red-600">
                     {error}
-                  </td>
-                </tr>
+                   </td>
+                 </tr>
               ) : filteredInvoices.length > 0 ? (
                 filteredInvoices.map((invoice) => (
                   <tr
@@ -189,13 +202,13 @@ export default function InvoiceTable() {
                       ₦{Number(invoice.amount).toLocaleString()}
                     </td>
                     <td className="py-4 whitespace-nowrap">
-                      {getInvoiceStatusBadge(invoice.status)}
+                      {getInvoiceStatusBadge(invoice.status, invoice.draft)}
                     </td>
                     <td className="py-4 whitespace-nowrap text-sm font-medium">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-[#0A6DC0] hover:text-[#085a9e] hover:bg-blue-50"
+                        className="text-[#FAB435] hover:bg-blue-50"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleViewInvoice(invoice.id);
@@ -217,7 +230,7 @@ export default function InvoiceTable() {
           </table>
         </div>
 
-        {/* Pagination placeholder — can be enhanced later */}
+        {/* Pagination placeholder */}
         <div className="flex items-center justify-center gap-2 mt-8">
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
             &lt;

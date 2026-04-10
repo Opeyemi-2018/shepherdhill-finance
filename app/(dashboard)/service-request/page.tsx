@@ -37,15 +37,6 @@ import StatCard from "@/components/HeaderCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ManualPayment {
-  id: number;
-  payment_date: string;
-  teller_reference: string;
-  proof_of_payment: string;
-  status: "pending" | "approved" | "rejected";
-  submitted_at: string;
-}
-
 interface ServiceRequest {
   id: number;
   service_name: string;
@@ -53,52 +44,7 @@ interface ServiceRequest {
   staff_count: string;
   status: string;
   start_date: string;
-  // present only on dummy rows
-  manual_payment?: ManualPayment;
-  is_dummy?: boolean;
 }
-
-// ─── DUMMY DATA ───────────────────────────────────────────────────────────────
-// These two rows are prepended to the real API data so the manual-payment
-// flow can be demonstrated before the backend supports it.
-
-const DUMMY_SERVICE_REQUESTS: ServiceRequest[] = [
-  {
-    id: 9001, // high ID to avoid clashing with real rows
-    service_name: "Armed Escort",
-    client: { name: "Zenith Bank Plc" },
-    staff_count: "4",
-    status: "pending",
-    start_date: "01 Apr 2026",
-    is_dummy: true,
-    manual_payment: {
-      id: 1,
-      payment_date: "2026-03-28",
-      teller_reference: "TRN-00123456",
-      proof_of_payment: "/dummy-proof-1.jpg", // placeholder path
-      status: "pending",
-      submitted_at: "2026-03-28T10:15:00Z",
-    },
-  },
-  {
-    id: 9002,
-    service_name: "Static Guard",
-    client: { name: "Access Holdings" },
-    staff_count: "8",
-    status: "pending",
-    start_date: "05 Apr 2026",
-    is_dummy: true,
-    manual_payment: {
-      id: 2,
-      payment_date: "2026-03-29",
-      teller_reference: "TRN-00789012",
-      proof_of_payment: "/dummy-proof-2.pdf", // placeholder path
-      status: "pending",
-      submitted_at: "2026-03-29T14:30:00Z",
-    },
-  },
-];
-// ─────────────────────────────────────────────────────────────────────────────
 
 function TableSkeleton(): JSX.Element {
   return (
@@ -157,8 +103,7 @@ const ServiceRequests = () => {
             : "—",
         }));
 
-        // DUMMY: prepend the two dummy rows to the real API data
-        setRequests([...DUMMY_SERVICE_REQUESTS, ...mapped]);
+        setRequests(mapped);
       } else {
         setError(result.message || "Failed to load service requests");
       }
@@ -173,7 +118,7 @@ const ServiceRequests = () => {
     setCurrentPage(1);
   }, [searchTerm, activeTab]);
 
-  // Stats — dummy rows counted in totals so numbers are consistent
+  // Stats
   const totalRequested = requests.length;
   const totalPending = requests.filter(
     (r) => r.status?.toLowerCase() === "pending",
@@ -222,17 +167,14 @@ const ServiceRequests = () => {
   };
 
   const handleRowClick = (req: ServiceRequest) => {
-    // DUMMY: dummy rows navigate to a dummy detail route using their id
-    // Real rows navigate to the real service-requests detail route
-    router.push(`/dashboard/service-requests/${req.id}`);
+    router.push(`/service-request/${req.id}`);
   };
 
   return (
     <div>
       <HeaderContent
         title="Service Requests"
-        description="Start with a clear overview of what matters most
-"
+        description="Start with a clear overview of what matters most"
       />
 
       <div className="flex justify-between overflow-x-auto gap-4 pt-6">
@@ -310,9 +252,6 @@ const ServiceRequests = () => {
                   Start Date
                 </th>
                 <th className="py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
-                  Payment
-                </th>
-                <th className="py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                   Action
                 </th>
               </tr>
@@ -322,7 +261,7 @@ const ServiceRequests = () => {
                 <TableSkeleton />
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-destructive">
+                  <td colSpan={6} className="py-8 text-center text-destructive">
                     {error}
                   </td>
                 </tr>
@@ -335,12 +274,6 @@ const ServiceRequests = () => {
                   >
                     <td className="py-4 pl-3 whitespace-nowrap text-[12px] sm:text-[14px] font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {req.service_name}
-                      {/* DUMMY: badge to indicate this row uses dummy data */}
-                      {req.is_dummy && (
-                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600 font-semibold">
-                          Demo
-                        </span>
-                      )}
                     </td>
                     <td className="py-4 whitespace-nowrap text-[12px] sm:text-[14px] font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {req.client.name}
@@ -353,17 +286,6 @@ const ServiceRequests = () => {
                     </td>
                     <td className="py-4 whitespace-nowrap text-[12px] sm:text-[14px] font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {req.start_date}
-                    </td>
-                    {/* DUMMY: show manual payment badge only on dummy rows */}
-                    <td className="py-4 whitespace-nowrap">
-                      {req.manual_payment ? (
-                        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          Manual · {req.manual_payment.status}
-                        </span>
-                      ) : (
-                        <span className="text-[12px] text-gray-400">—</span>
-                      )}
                     </td>
                     <td className="py-4 whitespace-nowrap">
                       <DropdownMenu>
@@ -395,7 +317,7 @@ const ServiceRequests = () => {
               ) : (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-8 text-center text-gray-500 dark:text-[#979797]"
                   >
                     {requests.length === 0

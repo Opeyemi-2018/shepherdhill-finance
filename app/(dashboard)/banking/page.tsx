@@ -130,7 +130,6 @@ STATEMENT DETAILS
 =================
 
 Statement ID     : STM-${stmt.id}
-Client Name      : ${stmt.client?.name || "Unknown"}
 Description      : ${stmt.description || "No description"}
 Status           : ${stmt.status.toUpperCase()}
 Created At       : ${new Date(stmt.created_at).toLocaleDateString("en-GB", {
@@ -212,9 +211,7 @@ ${stmt.attachment || "No attachment available"}
                 <th className="py-3 pl-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                   Statement ID
                 </th>
-                <th className="py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
-                  Client Name
-                </th>
+               
                 <th className="py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                   Description
                 </th>
@@ -247,9 +244,7 @@ ${stmt.attachment || "No attachment available"}
                     <td className="py-4 pl-3 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {`STM-${stmt.id.toString().padStart(4, "0")}`}
                     </td>
-                    <td className="py-4 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
-                      {stmt.client?.name || "Unknown"}
-                    </td>
+                  
                     <td className="py-4 text-sm text-[#3A3A3A] dark:text-[#979797]">
                       {stmt.description || "—"}
                     </td>
