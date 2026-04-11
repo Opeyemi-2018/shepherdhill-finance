@@ -146,26 +146,12 @@ export function PayableDetailModal({
     }
   };
 
-  const getAttachmentUrl = (path: string | null) => {
-    if (!path) return null;
+ 
 
-    let baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
-
-    // Remove /api/finance (or any /api* suffix) from base URL for static files
-    baseUrl = baseUrl.replace(/\/api(\/finance)?\/?$/, ""); // removes /api or /api/finance
-    baseUrl = baseUrl.replace(/\/$/, ""); // remove trailing slash if any
-
-    // If path already has http(s) (unlikely), return as-is
-    if (path.startsWith("http")) return path;
-
-    // Build clean URL: base + / + path (remove leading slash if path has it)
-    const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-    return `${baseUrl}/${cleanPath}`;
-  };
-
-  const isImage = (url: string | null) => {
-    if (!url) return false;
-    return /\.(jpg|jpeg|png)$/i.test(url);
+  const getAttachmentUrl = (attachment: string | null): string => {
+    if (!attachment) return "#";
+    const cleanPath = attachment.startsWith("/") ? attachment.slice(1) : attachment;
+    return `http://shepherdhill.edubiller.com/public/${cleanPath}`;
   };
 
   return (
@@ -274,7 +260,7 @@ export function PayableDetailModal({
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Attachment</p>
                 <div className="border rounded-lg overflow-hidden bg-muted/30">
-                  {isImage(getAttachmentUrl(payable.attachment)) ? (
+                  {(getAttachmentUrl(payable.attachment)) ? (
                     <div className="relative h-64 w-full">
                       <Image
                         src={getAttachmentUrl(payable.attachment)!}
@@ -284,6 +270,16 @@ export function PayableDetailModal({
                         unoptimized // for external images
                       />
                     </div>
+
+                //     <a
+                //   href={`http://shepherdhill.edubiller.com/public/${statement.attachment}`}
+                //   target="_blank"
+                //   rel="noopener noreferrer"
+                //   className="text-[#0A6DC0] hover:underline"
+                // >
+                  
+                //   View Attachment
+                // </a>
                   ) : (
                     <div className="h-32 flex flex-col items-center justify-center gap-3">
                       <p className="text-muted-foreground">

@@ -33,14 +33,19 @@ export default function InvoiceTable() {
   const { invoices, loading, error } = useInvoices();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"All Invoices" | "Paid" | "Unpaid" | "Draft">("All Invoices");
+  const [activeTab, setActiveTab] = useState<
+    "All Invoices" | "Paid" | "Unpaid" | "Draft"
+  >("All Invoices");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   const getInvoiceStatusBadge = (status: string, draft?: string) => {
     let textClass = "text-gray-700 dark:text-gray-400";
     let dotClass = "bg-gray-500";
     let displayText = "";
 
-    // Check if it's a draft (draft === "1" OR status is empty)
     const isDraft = draft === "1" || status === "";
 
     if (isDraft) {
@@ -60,12 +65,15 @@ export default function InvoiceTable() {
           dotClass = "bg-red-500";
           break;
         default:
-          displayText = status?.charAt(0).toUpperCase() + status?.slice(1) || "Unknown";
+          displayText =
+            status?.charAt(0).toUpperCase() + status?.slice(1) || "Unknown";
       }
     }
 
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${textClass}`}>
+      <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${textClass}`}
+      >
         <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`}></span>
         {displayText}
       </span>
@@ -99,6 +107,13 @@ export default function InvoiceTable() {
     return matchesSearch && matchesTab;
   });
 
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+  const currentData = filteredInvoices.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
+
   const handleViewInvoice = (id: number) => {
     router.push(`/invoices/${id}`);
   };
@@ -111,7 +126,7 @@ export default function InvoiceTable() {
       />
 
       <div className="bg-primary-foreground shadow-lg rounded-lg p-4 md:p-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex flex-col-reverse lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
           <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 w-full md:w-auto overflow-x-auto">
             {["All Invoices", "Paid", "Unpaid", "Draft"].map((tab) => (
               <button
@@ -176,27 +191,30 @@ export default function InvoiceTable() {
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-red-600">
                     {error}
-                   </td>
-                 </tr>
-              ) : filteredInvoices.length > 0 ? (
-                filteredInvoices.map((invoice) => (
+                  </td>
+                </tr>
+              ) : currentData.length > 0 ? (
+                currentData.map((invoice) => (
                   <tr
                     key={invoice.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors cursor-pointer"
                     onClick={() => handleViewInvoice(invoice.id)}
                   >
                     <td className="py-4 pl-3 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
-                      {`INV-${invoice.id.toString().padStart(4, '0')}`}
+                      {`INV-${invoice.id.toString().padStart(4, "0")}`}
                     </td>
                     <td className="py-4 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {invoice.client?.name || "Unknown"}
                     </td>
                     <td className="py-4 whitespace-nowrap text-sm text-[#3A3A3A] dark:text-[#979797]">
-                      {new Date(invoice.invoice_date).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                      {new Date(invoice.invoice_date).toLocaleDateString(
+                        "en-GB",
+                        {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        },
+                      )}
                     </td>
                     <td className="py-4 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
                       ₦{Number(invoice.amount).toLocaleString()}
@@ -221,7 +239,10 @@ export default function InvoiceTable() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-500 dark:text-[#979797]">
+                  <td
+                    colSpan={6}
+                    className="py-8 text-center text-gray-500 dark:text-[#979797]"
+                  >
                     No invoices found
                   </td>
                 </tr>
@@ -230,21 +251,46 @@ export default function InvoiceTable() {
           </table>
         </div>
 
-        {/* Pagination placeholder */}
-        <div className="flex items-center justify-center gap-2 mt-8">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
-            &lt;
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 bg-[#FAB435]/30 text-[#FAB435]">
-            1
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            2
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            &gt;
-          </Button>
-        </div>
+        {/* Pagination - Only this part was added */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              &lt;
+            </Button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <Button
+                key={page}
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 p-0 ${
+                  currentPage === page ? "bg-[#FAB435]/30 text-[#FAB435]" : ""
+                }`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              disabled={currentPage === totalPages}
+            >
+              &gt;
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

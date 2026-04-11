@@ -5,12 +5,14 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/user";
+import Image from "next/image";
 
 interface ProfileData {
   fullName: string;
   email: string;
   phone: string;
   role: string;
+  avatar: string | null;
   department: string;
   lastLogin: string;
 }
@@ -43,7 +45,7 @@ export default function ProfileDetailsTab() {
               Authorization: `Bearer ${token}`,
             },
             cache: "no-store",
-          }
+          },
         );
 
         if (!response.ok) {
@@ -61,15 +63,18 @@ export default function ProfileDetailsTab() {
         setProfile({
           fullName: user.name || "—",
           email: user.email || "—",
-          phone: user.phone ?? "Not provided",          // null → "Not provided"
-          role: user.type || "—",                        // "type" is the role field
-          department: "—",                               // not in response
+          phone: user.phone ?? "Not provided", // null → "Not provided"
+          role: user.type || "—", // "type" is the role field
+          department: "—", // not in response
           lastLogin: user.last_login
             ? new Date(user.last_login).toLocaleString("en-US", {
                 dateStyle: "medium",
                 timeStyle: "short",
               })
             : "Never",
+          avatar: user.avatar
+            ? `http://shepherdhill.edubiller.com/public/${user.avatar}`
+            : null,
         });
       } catch (err: any) {
         console.error("Profile fetch error:", err);
@@ -119,9 +124,22 @@ export default function ProfileDetailsTab() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-[#FAB435]/20 flex items-center justify-center text-[#E89500] text-2xl font-bold">
-            {getInitials(profile.fullName)}
-          </div>
+          {profile.avatar ? (
+            <Image
+              height={40}
+              width={40}
+              src={profile.avatar}
+              alt={profile.fullName}
+              unoptimized={true} // ← This is the important fix
+              priority
+              className="h-16 w-16 rounded-full object-cover border-2 border-[#FAB435]"
+            />
+          ) : (
+            <div className="h-16 w-16 rounded-full bg-[#FAB435]/20 flex items-center justify-center text-[#E89500] text-2xl font-bold">
+              {getInitials(profile.fullName)}
+            </div>
+          )}
+
           <div>
             <h2 className="text-xl font-semibold text-[#3A3A3A] dark:text-white">
               {profile.fullName}
@@ -132,12 +150,12 @@ export default function ProfileDetailsTab() {
           </div>
         </div>
 
-        <Button className="bg-[#FAB435]/20 hover:bg-[#FAB435]/30 text-[#E89500] border-none rounded-lg px-6">
+        {/* <Button className="bg-[#FAB435]/20 hover:bg-[#FAB435]/30 text-[#E89500] border-none rounded-lg px-6">
           Edit Profile
-        </Button>
+        </Button> */}
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-gray-800">
+      <div className=" rounded-lg p-6 border border-gray-200 dark:border-gray-800">
         <h3 className="text-lg font-semibold mb-6 text-[#3A3A3A] dark:text-white">
           Details
         </h3>
@@ -163,7 +181,7 @@ export default function ProfileDetailsTab() {
             <p className="font-medium mt-1">{profile.role}</p>
           </div>
 
-          <div>
+          {/* <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Department</p>
             <p className="font-medium mt-1">{profile.department}</p>
           </div>
@@ -171,7 +189,7 @@ export default function ProfileDetailsTab() {
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Last Login</p>
             <p className="font-medium mt-1">{profile.lastLogin}</p>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

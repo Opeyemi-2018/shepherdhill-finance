@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import HeaderContent from "@/components/HeaderContent";
 import { useAuth } from "@/context/user";
 import { toast } from "sonner";
@@ -16,13 +16,14 @@ interface Receivable {
   amountInvoiced: number | string;
   amountReceived: number | string;
   outstandingBalance: number | string;
+  attachment: string | null;
 }
 
 const TableSkeleton = () => (
   <>
     {[1, 2, 3, 4, 5].map((i) => (
       <tr key={i}>
-        <td colSpan={4} className="py-5">
+        <td colSpan={5} className="py-5">
           <div className="flex gap-4 animate-pulse">
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
             <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/5"></div>
@@ -43,6 +44,10 @@ export default function ReceivablesBreakdownPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     const fetchReceivables = async () => {
@@ -79,7 +84,6 @@ export default function ReceivablesBreakdownPage() {
           throw new Error(json.message || "Invalid response format");
         }
 
-        // Map real data to component shape
         const mapped: Receivable[] = json.data.data.map((item: any) => ({
           id: item.id,
           clientName: item.client?.name || "Unknown Client",
@@ -87,9 +91,11 @@ export default function ReceivablesBreakdownPage() {
           amountReceived:
             Number(item.invoice?.amount || 0) - Number(item.balance || 0),
           outstandingBalance: item.balance || "0",
+          attachment: item.attachment || null,
         }));
 
         setReceivables(mapped);
+        setCurrentPage(1); // Reset to first page when data loads
       } catch (err: any) {
         console.error("Fetch receivables error:", err);
         const msg = err.message || "Could not load receivables";
@@ -103,9 +109,25 @@ export default function ReceivablesBreakdownPage() {
     fetchReceivables();
   }, [token]);
 
+  // Filter + Pagination Logic
   const filteredReceivables = receivables.filter((item) =>
     item.clientName.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  const totalPages = Math.ceil(filteredReceivables.length / itemsPerPage);
+
+  const currentData = filteredReceivables.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
+
+  const getAttachmentUrl = (attachment: string | null): string => {
+    if (!attachment) return "#";
+    const cleanPath = attachment.startsWith("/")
+      ? attachment.slice(1)
+      : attachment;
+    return `http://shepherdhill.edubiller.com/public/${cleanPath}`;
+  };
 
   return (
     <div className="">
@@ -141,7 +163,7 @@ export default function ReceivablesBreakdownPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[800px]">
             <thead className="bg-white dark:bg-black/10">
               <tr>
                 <th className="py-3 pl-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
@@ -156,6 +178,9 @@ export default function ReceivablesBreakdownPage() {
                 <th className="py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase whitespace-nowrap tracking-wider">
                   Outstanding Balance
                 </th>
+                <th className="py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 dark:text-white uppercase whitespace-nowrap tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#979797]/30">
@@ -163,21 +188,21 @@ export default function ReceivablesBreakdownPage() {
                 <TableSkeleton />
               ) : error ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-red-600">
+                  <td colSpan={5} className="py-8 text-center text-red-600">
                     {error}
                   </td>
                 </tr>
-              ) : filteredReceivables.length === 0 ? (
+              ) : currentData.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="py-12 text-center text-[#9E9A9A] font-dm-sans"
                   >
                     No receivables found matching your search
                   </td>
                 </tr>
               ) : (
-                filteredReceivables.map((item) => (
+                currentData.map((item) => (
                   <tr key={item.id} className="transition-colors">
                     <td className="py-5 pl-4 text-[13px] sm:text-[15px] font-medium text-[#2F2F2F] dark:text-[#979797]">
                       {item.clientName}
@@ -191,6 +216,23 @@ export default function ReceivablesBreakdownPage() {
                     <td className="py-5 text-[13px] sm:text-[15px] text-[#2F2F2F] dark:text-[#979797]">
                       ₦{Number(item.outstandingBalance).toLocaleString()}
                     </td>
+                    <td className="py-5">
+                      {item.attachment ? (
+                        <a
+                          href={getAttachmentUrl(item.attachment)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[#FAB435] hover:underline"
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 text-sm">
+                          No attachment
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -198,34 +240,52 @@ export default function ReceivablesBreakdownPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-center sm:justify-end gap-2 mt-8">
-          <Button variant="outline" size="icon" className="h-8 w-8" disabled>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          <div className="flex items-center gap-1">
+        {/* Pagination - Only added this part */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center sm:justify-end gap-2 mt-8">
             <Button
               variant="outline"
-              size="sm"
-              className="h-8 w-8 bg-[#FAB435]/30 text-[#FAB435] border-none"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
             >
-              1
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="sm" className="h-8 w-8">
-              2
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 w-8">
-              3
-            </Button>
-            <Button variant="outline" size="sm" className="h-8 w-8">
-              4
+
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <Button
+                    key={page}
+                    variant="outline"
+                    size="sm"
+                    className={`h-8 w-8 ${
+                      currentPage === page
+                        ? "bg-[#FAB435]/30 text-[#FAB435] border-none"
+                        : ""
+                    }`}
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                ),
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Paperclip, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/context/user"; // adjust path if needed
-import { toast } from "sonner"; // if you have sonner installed, otherwise use alert
+import { useAuth } from "@/context/user";
+import { toast } from "sonner";
 
 export default function UpdateProfileTab() {
   const { token } = useAuth();
@@ -19,15 +19,19 @@ export default function UpdateProfileTab() {
 
   const [uploadedPhoto, setUploadedPhoto] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(true); // Added for better UX
 
-  // Optional: pre-fill form with current profile (fetch once on mount)
+  // Pre-fill form with current profile data
   useEffect(() => {
     const fetchCurrentProfile = async () => {
-      if (!token) return;
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_CLIENT_URL}/profile/update`,
+          `${process.env.NEXT_PUBLIC_API_CLIENT_URL}/profile`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -35,9 +39,13 @@ export default function UpdateProfileTab() {
           },
         );
 
-        if (!res.ok) return;
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
 
         const json = await res.json();
+
         if (json.status && json.data?.user) {
           const user = json.data.user;
           setForm({
@@ -47,6 +55,8 @@ export default function UpdateProfileTab() {
         }
       } catch (err) {
         console.error("Failed to pre-fill profile:", err);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -63,12 +73,12 @@ export default function UpdateProfileTab() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Please upload an image file (JPG/JPEG)");
+      toast.error("Please upload an image file (JPG/JPEG)");
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("File size must be under 5MB");
+      toast.error("File size must be under 5MB");
       return;
     }
 
@@ -77,12 +87,12 @@ export default function UpdateProfileTab() {
 
   const handleSave = async () => {
     if (!token) {
-      alert("You must be logged in to update profile");
+      toast.error("You must be logged in to update profile");
       return;
     }
 
     if (!form.name.trim()) {
-      alert("Name is required");
+      toast.error("Name is required");
       return;
     }
 
@@ -91,7 +101,7 @@ export default function UpdateProfileTab() {
     try {
       const formData = new FormData();
       formData.append("name", form.name.trim());
-      formData.append("phone", form.phone.trim() || ""); // allow empty
+      formData.append("phone", form.phone.trim() || "");
 
       if (uploadedPhoto) {
         formData.append("photo", uploadedPhoto);
@@ -100,7 +110,7 @@ export default function UpdateProfileTab() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_CLIENT_URL}/profile/update`,
         {
-          method: "POST", 
+          method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -132,9 +142,18 @@ export default function UpdateProfileTab() {
   };
 
   const handleCancel = () => {
-    setForm({ name: "", phone: "" });
+    // Optionally reset to original values (you can improve this later)
     setUploadedPhoto(null);
   };
+
+  if (loading) {
+    return (
+      <div className="py-12 flex flex-col items-center justify-center text-gray-500">
+        <Loader2 className="h-8 w-8 animate-spin mb-3" />
+        <p>Loading current profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

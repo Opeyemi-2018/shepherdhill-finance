@@ -81,7 +81,7 @@ export default function SettingsPersonalInfo() {
               </div>
             </button>
 
-            <button
+            {/* <button
               onClick={() => setActiveTab("audit")}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors",
@@ -97,7 +97,7 @@ export default function SettingsPersonalInfo() {
                   View account activity
                 </span>
               </div>
-            </button>
+            </button> */}
           </div>
 
           {/* Main Content Area */}
@@ -105,7 +105,7 @@ export default function SettingsPersonalInfo() {
             {activeTab === "details" && <ProfileDetailsTab />}
             {activeTab === "update" && <UpdateProfileTab />}
             {activeTab === "password" && <PasswordSettingsTab />}
-            {activeTab === "audit" && <AuditLogsTab />}
+            {/* {activeTab === "audit" && <AuditLogsTab />} */}
           </div>
         </div>
       </div>

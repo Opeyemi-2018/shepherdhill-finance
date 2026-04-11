@@ -7,12 +7,12 @@ import { IoChevronBackOutline } from "react-icons/io5";
 import { Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/user";
-import { FaUserLarge } from "react-icons/fa6";
 import { useState, useEffect } from "react";
 
 interface StatementDetail {
   id: number;
   client_id: string;
+  bank_name: string | null;        // ← Added
   description: string | null;
   attachment: string;
   status: string;
@@ -89,7 +89,7 @@ export default function StatementDetailPage() {
     fetchStatement();
   }, [statementId, token]);
 
-  // ── Download Statement as Text File ─────────────────────────────────────
+  // ── Fancy Download Statement ─────────────────────────────────────
   const handleDownload = () => {
     if (!statement) {
       toast.error("No statement data available");
@@ -97,40 +97,52 @@ export default function StatementDetailPage() {
     }
 
     const content = `
-STATEMENT DETAILS
-=================
+============================================================
+                  BANK STATEMENT
+============================================================
 
-Statement ID     : STM-${statement.id}
+Statement ID       : STM-${statement.id}
+Bank Name          : ${statement.bank_name || "N/A"}
+Status             : ${statement.status.toUpperCase()}
+Created Date       : ${new Date(statement.created_at).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
+Updated Date       : ${new Date(statement.updated_at).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })}
 
-Status           : ${statement.status.toUpperCase()}
-Created At       : ${new Date(statement.created_at).toLocaleDateString(
-      "en-GB",
-      {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      },
-    )}
-Updated At       : ${new Date(statement.updated_at).toLocaleDateString(
-      "en-GB",
-      {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      },
-    )}
+------------------------------------------------------------
+CLIENT INFORMATION
+------------------------------------------------------------
+Client Name        : ${statement.client?.name || "N/A"}
+Email              : ${statement.client?.email || "N/A"}
+Address            : ${statement.client?.address || "N/A"}
 
-Description:
+------------------------------------------------------------
+DESCRIPTION
+------------------------------------------------------------
 ${statement.description || "No description provided."}
 
-Attachment:
-${statement.attachment ? statement.attachment : "No attachment available"}
+------------------------------------------------------------
+ATTACHMENT
+------------------------------------------------------------
+${statement.attachment ? "View Attachment: " + statement.attachment : "No attachment available"}
+
+============================================================
+Generated on: ${new Date().toLocaleString("en-GB")}
+Shepherd Hill Finance System
+============================================================
     `.trim();
 
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
+    a.download = `Bank_Statement_STM-${statement.id}_${(statement.bank_name || "Client").replace(/\s+/g, "_")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -205,6 +217,13 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
           </div>
 
           <div className="space-y-1">
+            <p className="text-[12px] text-muted-foreground">Bank Name</p>
+            <p className="font-medium text-[14px]">
+              {statement.bank_name || "—"}
+            </p>
+          </div>
+
+          <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Created At</p>
             <p className="font-medium text-[14px]">
               {new Date(statement.created_at).toLocaleDateString("en-GB", {
@@ -212,13 +231,6 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
                 month: "short",
                 year: "numeric",
               })}
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-[12px] text-muted-foreground">Description</p>
-            <p className="font-medium text-[14px]">
-              {statement.description || "—"}
             </p>
           </div>
 
@@ -233,16 +245,19 @@ ${statement.attachment ? statement.attachment : "No attachment available"}
             </p>
           </div>
 
+          <div className="space-y-1 md:col-span-2 lg:col-span-1">
+            <p className="text-[12px] text-muted-foreground">Description</p>
+            <p className="font-medium text-[14px]">
+              {statement.description || "—"}
+            </p>
+          </div>
+
           <div className="space-y-1">
             <p className="text-[12px] text-muted-foreground">Attachment</p>
             <p className="font-medium text-[14px]">
               {statement.attachment ? (
                 <a
-                  href={
-                    statement.attachment.startsWith("http")
-                      ? statement.attachment
-                      : `${process.env.NEXT_PUBLIC_API_URL}/${statement.attachment}`
-                  }
+                  href={`http://shepherdhill.edubiller.com/public/${statement.attachment}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#0A6DC0] hover:underline"

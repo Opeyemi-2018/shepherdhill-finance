@@ -4,11 +4,10 @@
 import React, { useState, useEffect } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Clock, Loader2, ChevronDown } from "lucide-react";
+import { Clock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/user";
 
-// Shadcn imports
 import {
   Select,
   SelectContent,
@@ -22,14 +21,13 @@ interface Activity {
   type: "invoice" | "expense";
   title: string;
   description: string;
-  time: string; // raw ISO date for sorting
-  displayTime: string; // "2 hours ago" etc.
+  time: string;
+  displayTime: string;
   status?: string;
   entity_name: string;
   total_amount: number;
   paid_amount?: number;
   balance?: number;
-  date: string;
 }
 
 const RecentActivities = () => {
@@ -63,62 +61,58 @@ const RecentActivities = () => {
           },
         );
 
-        if (!res.ok) {
-          throw new Error(`Failed: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Failed: ${res.status}`);
 
         const json = await res.json();
 
-        if (!json.status) {
+        if (!json.status || !json.records) {
           throw new Error(json.message || "Invalid response");
         }
 
-        // Combine invoices + expenses
-        const invoiceActivities: Activity[] = json.records.invoices.map(
-          (inv: any, index: number) => ({
-            id: `inv-${inv.id}-${index}`,
-            type: "invoice",
-            title: `Invoice #${inv.id} - ${inv.status || "Pending"}`,
-            description: `₦${inv.total_amount.toLocaleString()} to ${inv.entity_name}. Balance: ₦${(inv.balance || 0).toLocaleString()}`,
-            time: inv.date,
-            displayTime: formatDistanceToNow(parseISO(inv.date), {
-              addSuffix: true,
-            }),
+        // Map Invoices
+        const invoiceActivities: Activity[] = (json.records.invoices || []).map(
+          (inv: any) => ({
+            id: `inv-${inv.id}`,
+            type: "invoice" as const,
+            title: `Invoice #${inv.id}`,
+            description: `₦${Number(inv.total_amount || 0).toLocaleString()} to ${inv.entity_name || "Client"}`,
+            time: inv.date || inv.created_at || new Date().toISOString(),
+            displayTime: formatDistanceToNow(
+              parseISO(inv.date || inv.created_at || new Date().toISOString()),
+              { addSuffix: true },
+            ),
             status: inv.status,
-            entity_name: inv.entity_name,
-            total_amount: inv.total_amount,
-            paid_amount: inv.paid_amount,
-            balance: inv.balance,
-            date: inv.date,
+            entity_name: inv.entity_name || "Unknown",
+            total_amount: Number(inv.total_amount || 0),
+            paid_amount: Number(inv.paid_amount || 0),
+            balance: Number(inv.balance || 0),
           }),
         );
 
-        const expenseActivities: Activity[] = json.records.expenses.map(
-          (exp: any, index: number) => ({
-            id: `exp-${exp.id}-${index}`,
-            type: "expense",
-            title: `Expense #${exp.id} - ${exp.status || "Pending"}`,
-            description: `₦${exp.total_amount.toLocaleString()} to ${exp.entity_name}${exp.description ? ` (${exp.description})` : ""}`,
-            time:
-              exp.date === "0000-00-00" ? new Date().toISOString() : exp.date,
-            displayTime:
-              exp.date === "0000-00-00"
-                ? "Unknown date"
-                : formatDistanceToNow(parseISO(exp.date), { addSuffix: true }),
+        // Map Expenses
+        const expenseActivities: Activity[] = (json.records.expenses || []).map(
+          (exp: any) => ({
+            id: `exp-${exp.id}`,
+            type: "expense" as const,
+            title: `Expense #${exp.id}`,
+            description: `₦${Number(exp.total_amount || 0).toLocaleString()} to ${exp.entity_name || "Vendor"}${exp.description ? ` - ${exp.description}` : ""}`,
+            time: exp.date || exp.created_at || new Date().toISOString(),
+            displayTime: formatDistanceToNow(
+              parseISO(exp.date || exp.created_at || new Date().toISOString()),
+              { addSuffix: true },
+            ),
             status: exp.status,
-            entity_name: exp.entity_name,
-            total_amount: exp.total_amount,
-            date: exp.date,
+            entity_name: exp.entity_name || "Unknown",
+            total_amount: Number(exp.total_amount || 0),
           }),
         );
 
-        // Merge and sort by date (newest first)
+        // Combine both and sort by newest first
         const allActivities = [...invoiceActivities, ...expenseActivities].sort(
           (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime(),
         );
 
-        // Take most recent 5–10
-        setActivities(allActivities.slice(0, 10));
+        setActivities(allActivities.slice(0, 10)); // Show latest 10
 
         if (allActivities.length > 0) {
           setSelectedId(allActivities[0].id);
@@ -141,47 +135,53 @@ const RecentActivities = () => {
     if (activity.type === "invoice") {
       return (
         <>
-          <p className="mb-4 font-medium">
-            Invoice #{activity.id.split("-")[1]} for {activity.entity_name}
+          <p className="mb-4 font-medium text-lg">Invoice Details</p>
+          <p className="mb-3">
+            Client: <strong>{activity.entity_name}</strong>
           </p>
           <p className="mb-3">
-            Total: ₦{activity.total_amount.toLocaleString()}
+            Total Amount:{" "}
+            <strong>₦{activity.total_amount.toLocaleString()}</strong>
           </p>
           <p className="mb-3">
-            Paid: ₦{(activity.paid_amount || 0).toLocaleString()}
+            Paid:{" "}
+            <strong>₦{(activity.paid_amount || 0).toLocaleString()}</strong>
           </p>
           <p className="mb-4">
-            Outstanding Balance: ₦{(activity.balance || 0).toLocaleString()}
+            Outstanding:{" "}
+            <strong>₦{(activity.balance || 0).toLocaleString()}</strong>
           </p>
-          <p className="text-sm text-gray-500">
-            Status: <strong>{activity.status || "Pending"}</strong>
-          </p>
-          <p className="text-sm text-gray-500 mt-4">
-            Recorded {activity.displayTime}
+          <p>
+            Status:{" "}
+            <strong className="capitalize">
+              {activity.status || "Pending"}
+            </strong>
           </p>
         </>
       );
     }
 
+    // Expense
     return (
       <>
-        <p className="mb-4 font-medium">
-          Expense #{activity.id.split("-")[1]} to {activity.entity_name}
-        </p>
+        <p className="mb-4 font-medium text-lg">Expense Details</p>
         <p className="mb-3">
-          Amount: ₦{activity.total_amount.toLocaleString()}
+          Vendor: <strong>{activity.entity_name}</strong>
         </p>
         <p className="mb-4">
-          Status: <strong>{activity.status || "Pending"}</strong>
+          Amount: <strong>₦{activity.total_amount.toLocaleString()}</strong>
         </p>
-        <p className="text-sm text-gray-500">Recorded {activity.displayTime}</p>
+        <p>
+          Status:{" "}
+          <strong className="capitalize">{activity.status || "Pending"}</strong>
+        </p>
       </>
     );
   };
 
   return (
     <div className="bg-primary-foreground rounded-xl">
-      <div className="py-1 border-b px-6">
+      <div className="py-4 border-b px-6">
         <h2 className="text-lg font-semibold">Recent Activities</h2>
       </div>
 
@@ -203,12 +203,9 @@ const RecentActivities = () => {
         </div>
       ) : (
         <div className="mt-4">
-          {/* Mobile: Shadcn Select Dropdown */}
+          {/* Mobile Select */}
           <div className="lg:hidden px-6 mb-6">
-            <Select
-              value={selectedId || ""}
-              onValueChange={(value) => setSelectedId(value || null)}
-            >
+            <Select value={selectedId || ""} onValueChange={setSelectedId}>
               <SelectTrigger className="w-full h-12">
                 <SelectValue placeholder="Select an activity" />
               </SelectTrigger>
@@ -223,19 +220,19 @@ const RecentActivities = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 h-[520px]">
-            {/* Desktop: Left sidebar list (hidden on mobile) */}
+            {/* Left Sidebar - List */}
             <div className="hidden lg:block overflow-y-auto border-r">
               {activities.map((activity) => (
                 <button
                   key={activity.id}
                   onClick={() => setSelectedId(activity.id)}
                   className={cn(
-                    "w-full px-3 py-4 text-left transition-colors flex items-start gap-3 hover:bg-background",
+                    "w-full px-4 py-4 text-left transition-colors flex items-start gap-3 hover:bg-background border-l-4 border-transparent",
                     selectedId === activity.id &&
-                      "bg-background border-l-4 border-[#FAB435]",
+                      "bg-background border-[#FAB435]",
                   )}
                 >
-                  <div className="p-2 rounded-full flex-shrink-0 bg-[#FAB435]/10">
+                  <div className="p-2 rounded-full flex-shrink-0 bg-[#FAB435]/10 mt-0.5">
                     <Clock className="w-5 h-5 text-[#FAB435]" />
                   </div>
 
@@ -243,7 +240,7 @@ const RecentActivities = () => {
                     <p className="font-semibold text-[#3A3A3A] dark:text-white text-[14px] line-clamp-1">
                       {activity.title}
                     </p>
-                    <p className="text-[12px] text-[#979797]  mt-1 line-clamp-2">
+                    <p className="text-[12px] text-[#979797] mt-1 line-clamp-2">
                       {activity.displayTime}
                     </p>
                   </div>
@@ -251,19 +248,20 @@ const RecentActivities = () => {
               ))}
             </div>
 
-            {/* Right - Detail View (always visible) */}
+            {/* Detail View */}
             <div className="p-6 overflow-y-auto bg-background lg:border-l">
               {selectedActivity ? (
-                <div className="prose prose-sm max-w-none text-gray-700">
+                <div className="prose prose-sm max-w-none dark:text-white">
                   {getDetailContent(selectedActivity)}
+                  <p className="text-sm text-gray-500 mt-6">
+                    Recorded {selectedActivity.displayTime}
+                  </p>
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-white">
+                <div className="h-full flex flex-col items-center justify-center text-gray-400">
                   <p className="text-lg font-medium">Select an activity</p>
                   <p className="text-sm mt-2">
-                    {activities.length > 0
-                      ? "Choose from the list above"
-                      : "No activities available"}
+                    Choose from the list on the left
                   </p>
                 </div>
               )}

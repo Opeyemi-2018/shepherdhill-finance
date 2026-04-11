@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 interface Statement {
   id: number;
   client_id: string;
+  bank_name: string | null; // Added
   description: string | null;
   attachment: string;
   status: string;
@@ -23,7 +24,7 @@ interface Statement {
   client: {
     id: number;
     name: string;
-  };
+  } | null;
   creator: {
     id: number;
     name: string;
@@ -58,6 +59,10 @@ export default function StatementTable() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   useEffect(() => {
     const fetchStatements = async () => {
       if (!token) {
@@ -79,7 +84,7 @@ export default function StatementTable() {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-          }
+          },
         );
 
         if (!res.ok) {
@@ -93,6 +98,7 @@ export default function StatementTable() {
         }
 
         setStatements(json.data || []);
+        setCurrentPage(1);
       } catch (err: any) {
         console.error("Statements fetch error:", err);
         setError(err.message || "Failed to load statements");
@@ -111,9 +117,17 @@ export default function StatementTable() {
     return (
       stmt.client?.name?.toLowerCase().includes(q) ||
       stmt.description?.toLowerCase().includes(q) ||
+      stmt.bank_name?.toLowerCase().includes(q) || // Added bank name search
       `STM-${stmt.id}`.toLowerCase().includes(q)
     );
   });
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredStatements.length / itemsPerPage);
+  const currentData = filteredStatements.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   const handleViewStatement = (id: number) => {
     router.push(`/banking/${id}`);
@@ -123,13 +137,13 @@ export default function StatementTable() {
     router.push("/create-statement");
   };
 
-  // ── Download Statement Details ─────────────────────────────────────
   const handleDownload = (stmt: Statement) => {
     const content = `
 STATEMENT DETAILS
 =================
 
 Statement ID     : STM-${stmt.id}
+Bank Name        : ${stmt.bank_name || "N/A"}
 Description      : ${stmt.description || "No description"}
 Status           : ${stmt.status.toUpperCase()}
 Created At       : ${new Date(stmt.created_at).toLocaleDateString("en-GB", {
@@ -151,7 +165,7 @@ ${stmt.attachment || "No attachment available"}
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `Statement_STM-${stmt.id}_${(stmt.client?.name || "Client").replace(/\s+/g, "_")}.txt`;
+    a.download = `Statement_STM-${stmt.id}_${(stmt.bank_name || "Client").replace(/\s+/g, "_")}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -205,13 +219,15 @@ ${stmt.attachment || "No attachment available"}
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <table className="w-full min-w-[1000px]">
             <thead className="bg-white dark:bg-black/10">
               <tr>
                 <th className="py-3 pl-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                   Statement ID
                 </th>
-               
+                <th className="py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
+                  Bank Name
+                </th>
                 <th className="py-3 text-left text-xs font-medium text-gray-500 dark:text-white uppercase tracking-wider">
                   Description
                 </th>
@@ -235,8 +251,8 @@ ${stmt.attachment || "No attachment available"}
                     {error}
                   </td>
                 </tr>
-              ) : filteredStatements.length > 0 ? (
-                filteredStatements.map((stmt) => (
+              ) : currentData.length > 0 ? (
+                currentData.map((stmt) => (
                   <tr
                     key={stmt.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
@@ -244,9 +260,15 @@ ${stmt.attachment || "No attachment available"}
                     <td className="py-4 pl-3 whitespace-nowrap text-sm font-medium text-[#3A3A3A] dark:text-[#979797]">
                       {`STM-${stmt.id.toString().padStart(4, "0")}`}
                     </td>
-                  
                     <td className="py-4 text-sm text-[#3A3A3A] dark:text-[#979797]">
-                      {stmt.description || "—"}
+                      {stmt.bank_name || "—"}
+                    </td>
+                    <td className="py-4 text-sm text-[#3A3A3A] dark:text-[#979797]">
+                      {stmt.description
+                        ? stmt.description.length > 15
+                          ? stmt.description.substring(0, 15) + "..."
+                          : stmt.description
+                        : "—"}
                     </td>
                     <td className="py-4 whitespace-nowrap">
                       <span
@@ -254,10 +276,11 @@ ${stmt.attachment || "No attachment available"}
                           "inline-flex px-2.5 py-1 text-xs font-medium rounded-full",
                           stmt.status === "active"
                             ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-700"
+                            : "bg-gray-100 text-gray-700",
                         )}
                       >
-                        {stmt.status?.charAt(0).toUpperCase() + stmt.status?.slice(1) || "Unknown"}
+                        {stmt.status?.charAt(0).toUpperCase() +
+                          stmt.status?.slice(1) || "Unknown"}
                       </span>
                     </td>
                     <td className="py-4 whitespace-nowrap text-sm text-[#3A3A3A] dark:text-[#979797]">
@@ -273,7 +296,7 @@ ${stmt.attachment || "No attachment available"}
                         >
                           View
                         </Button>
-                        <Button
+                        {/* <Button
                           variant="ghost"
                           size="sm"
                           className="text-[#E89500] hover:bg-amber-50"
@@ -283,7 +306,7 @@ ${stmt.attachment || "No attachment available"}
                           }}
                         >
                           <Download className="h-4 w-4" />
-                        </Button>
+                        </Button> */}
                       </div>
                     </td>
                   </tr>
@@ -302,25 +325,46 @@ ${stmt.attachment || "No attachment available"}
           </table>
         </div>
 
-        {/* Pagination placeholder */}
-        <div className="flex items-center justify-center gap-2 mt-8">
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
-            &lt;
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 bg-[#FAB435]/30 text-[#FAB435]"
-          >
-            1
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            2
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            &gt;
-          </Button>
-        </div>
+        {/* Real Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              &lt;
+            </Button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <Button
+                key={page}
+                variant="ghost"
+                size="sm"
+                className={`h-8 w-8 p-0 ${
+                  currentPage === page ? "bg-[#FAB435]/30 text-[#FAB435]" : ""
+                }`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </Button>
+            ))}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
+              disabled={currentPage === totalPages}
+            >
+              &gt;
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
