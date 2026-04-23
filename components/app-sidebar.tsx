@@ -67,7 +67,7 @@ const items: MenuItem[] = [
   { title: "Receivable", url: "/receiviable", icon: HandCoins },
   { title: "Payable", url: "/payable", icon: Banknote },
   { title: "Report", url: "/report", icon: BookText },
-  // { title: "Retainership Form", url: "/retainership-form", icon: BookText },
+  { title: "Retainership Form", url: "/retainership-form", icon: BookText },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

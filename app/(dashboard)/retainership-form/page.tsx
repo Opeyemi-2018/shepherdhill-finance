@@ -112,7 +112,7 @@ export default function RetainershipPage() {
 
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/admin/retainership/list`,
+          `${process.env.NEXT_PUBLIC_API_URL}/retainership/list`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },
@@ -141,7 +141,7 @@ export default function RetainershipPage() {
   }, [searchTerm]);
 
   const handleViewForm = (code: string) => {
-    router.push(`/dashboard/retainership-form/${code}`);
+    router.push(`/retainership-form/${code}`);
   };
 
   const handleDeleteClick = (form: RetainershipForm) => {
@@ -155,7 +155,7 @@ export default function RetainershipPage() {
     setIsDeleting(true);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/retainership/delete/${selectedForm.code}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/retainership/delete/${selectedForm.code}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -195,7 +195,7 @@ export default function RetainershipPage() {
     if (!token) return;
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/retainership/list`,
+        `${process.env.NEXT_PUBLIC_API_URL}/retainership/list`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -278,7 +278,7 @@ export default function RetainershipPage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold ">Retainership Forms</h1>
         <Button
-          onClick={() => router.push("/dashboard/add-retainership-form")}
+          onClick={() => router.push("/add-retainership-form")}
           className="bg-[#FAB435] hover:bg-[#E89500] text-black flex items-center gap-2"
         >
           <Plus className="h-5 w-5" />
@@ -382,13 +382,13 @@ export default function RetainershipPage() {
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem
+                          {/* <DropdownMenuItem
                             className="cursor-pointer text-green-600"
                             onClick={() => handleSignClick(form)}
                           >
                             <FileSignature className="h-4 w-4 mr-2" />
                             Sign Form
-                          </DropdownMenuItem>
+                          </DropdownMenuItem> */}
                           <DropdownMenuItem
                             className="cursor-pointer text-red-600"
                             onClick={() => handleDeleteClick(form)}

@@ -132,7 +132,7 @@ export default function RetainershipFormDetail() {
 
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/admin/retainership/form/${code}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/retainership/form/${code}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           },
