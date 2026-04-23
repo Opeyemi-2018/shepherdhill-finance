@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import {
@@ -9,7 +8,7 @@ import {
   useEffect,
   useCallback,
 } from "react";
-import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface User {
   id: number;
@@ -24,6 +23,7 @@ interface AuthContextType {
   login: (token: string, user: User) => void;
   logout: () => void;
   isLoading: boolean;
+  handleAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,7 +57,6 @@ const getInitialAuthState = (): { token: string | null; user: User | null } => {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const initial = getInitialAuthState();
-  const router = useRouter();
 
   const [user, setUser] = useState<User | null>(initial.user);
   const [token, setToken] = useState<string | null>(initial.token);
@@ -67,18 +66,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const logout = useCallback(() => {
-    setIsLoading(true);
+  const clearAuth = useCallback(() => {
     setToken(null);
     setUser(null);
-
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
-
     deleteCookie("auth_token");
+  }, []);
 
-    router.replace("/sign-in");
-  }, [router]);
+  const logout = useCallback(() => {
+    clearAuth();
+    window.location.replace("/sign-in");
+  }, [clearAuth]);
+
+  const handleAuthError = useCallback(() => {
+    clearAuth();
+    toast.info("Your session has expired. Please sign in again.");
+    window.location.replace("/sign-in");
+  }, [clearAuth]);
 
   const login = useCallback((newToken: string, newUser: User) => {
     setToken(newToken);
@@ -91,7 +96,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{ user, token, login, logout, isLoading, handleAuthError }}
+    >
       {children}
     </AuthContext.Provider>
   );
