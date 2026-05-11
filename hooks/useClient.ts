@@ -56,20 +56,23 @@ export function useClients(): UseClientsReturn {
             Authorization: `Bearer ${token}`,
           },
           cache: "no-store",
-        }
+        },
       );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch clients: ${response.status}`);
-      }
 
       const json = await response.json();
 
-      if (!json.status || !json.data?.client_data) {
-        throw new Error(json.message || "Invalid response from server");
+      if (response.ok && json.status === true && json.data?.client_data) {
+        setClients(json.data.client_data);
+        setError(null);
+      } else {
+        // Show exact message from server
+        const errorMsg =
+          json.message ||
+          json.error ||
+          `Failed to fetch clients (${response.status})`;
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
-
-      setClients(json.data.client_data);
     } catch (err: any) {
       console.error("useClients fetch error:", err);
       const errorMsg = err.message || "Could not load clients";
