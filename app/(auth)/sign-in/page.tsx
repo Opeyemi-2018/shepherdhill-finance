@@ -159,12 +159,12 @@ const SignIn = () => {
                 )}
               />
 
-              <Link
+              {/* <Link
                 href="/forgot-password"
                 className="text-sm underline-offset-4 text-[#FAB435] hover:underline block text-right"
               >
                 Forgot your password?
-              </Link>
+              </Link> */}
 
               <Button
                 disabled={isLoading}
