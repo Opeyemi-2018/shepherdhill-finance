@@ -151,7 +151,7 @@ export function PayableDetailModal({
   const getAttachmentUrl = (attachment: string | null): string => {
     if (!attachment) return "#";
     const cleanPath = attachment.startsWith("/") ? attachment.slice(1) : attachment;
-    return `http://shepherdhill.edubiller.com/public/${cleanPath}`;
+    return `https://api.shsaccess.com/public/${cleanPath}`;
   };
 
   return (

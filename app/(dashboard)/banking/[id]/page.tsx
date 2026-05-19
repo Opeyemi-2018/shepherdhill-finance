@@ -257,7 +257,7 @@ Shepherd Hill Finance System
             <p className="font-medium text-[14px]">
               {statement.attachment ? (
                 <a
-                  href={`http://shepherdhill.edubiller.com/public/${statement.attachment}`}
+                  href={`https://api.shsaccess.com/public/${statement.attachment}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#0A6DC0] hover:underline"
